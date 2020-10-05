@@ -7,7 +7,7 @@
 ;; Description: A npm packages client.
 ;; Keyword: npm packages client
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "24.3") (request "0.3.0"))
+;; Package-Requires: ((emacs "27.1") (request "0.3.0"))
 ;; URL: https://github.com/jcs-elpa/npm-market
 
 ;; This file is NOT part of GNU Emacs.
@@ -45,7 +45,7 @@
   :link '(url-link :tag "Repository" "https://github.com/jcs-elpa/npm-market"))
 
 (defconst npm-market-url "https://www.npmjs.com/search/"
-  "npm packages url.")
+  "Npm packages url.")
 
 (defconst npm-market--url-format (format "%ssuggestions?q=%%s" npm-market-url)
   "URL format to request NPM packages by search.")
@@ -56,7 +56,17 @@
 (defvar npm-market--data nil
   "Use to store package list data.")
 
+;;; Util
+
+(defun npm-market--project-roort ()
+  "Return project root path."
+  (cdr (project-current)))
+
 ;;; Local
+
+(defun npm-market--local-json ()
+  "Return JSON from current `package.json' file."
+  (json-read-file (f-join (npm-market--project-roort) "package.json")))
 
 ;;; Core
 
@@ -66,7 +76,7 @@
   (setq npm-market--request nil))
 
 (defun npm-market--search (text)
-  "Search npm suggested packages list."
+  "Search npm suggested packages list by TEXT."
   (npm-market-reset-request)
   (setq npm-market--request
         (request
@@ -82,7 +92,7 @@
           :error
           ;; NOTE: Accept, error.
           (cl-function
-           (lambda (&rest _args &key _error-thrown &allow-other-keys)
+           (lambda (&rest args &key _error-thrown &allow-other-keys)
              (npm-market-reset-request))))))
 
 ;;; Button
@@ -110,13 +120,17 @@
   (save-excursion
     (goto-char (point-min))
     (while (not (eobp))
-      (move-to-column 0)
-      (let ((pkg-name (npm-market--tablist-get-value 'name))
-            (author (npm-market--tablist-get-value 'author)))
-        (when pkg-name
-          (make-button (1+ (point)) (+ 1 (point) (length pkg-name)) :type 'npm-market--name-button)
-          ;;(make-button (1+ (point)) (+ (point) (length author)) :type 'npm-market--author-button)
-          ))
+      (let ((name-pkg (npm-market--tablist-get-value 'name))
+            (name-author (npm-market--tablist-get-value 'author)))
+        (when name-pkg
+          (move-to-column (npm-market--tablist-column 'name))
+          (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
+                       (+ (point) (length name-pkg))
+                       :type 'npm-market--name-button)
+          (move-to-column (npm-market--tablist-column 'author))
+          (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
+                       (+ (point) (length name-author))
+                       :type 'npm-market--author-button)))
       (forward-line 1))))
 
 ;;; Buffer
@@ -133,7 +147,7 @@
 (defconst npm-market--buffer-name "*npm-market*"
   "Name of the buffer to display npm packages.")
 
-(defconst npm-market--title-prefix "Search packages: "
+(defconst npm-market--title-prefix "Keywords: "
   "Header put infront of the input string.")
 
 (defcustom npm-market-delay 0.5
@@ -171,23 +185,37 @@
   (cl-case sym
     (name 0) (version 1) (status 2) (description 3) (author 4) (date 5)))
 
+(defun npm-market--tablist-symbol (index)
+  "Return symbol id by INDEX."
+  (cl-case index
+    (0 'name) (1 'version) (2 'status) (3 'description) (4 'author) (5 'date)))
+
 (defun npm-market--tablist-get-value (sym)
   "Get value by SYM."
   (let ((entry (tabulated-list-get-entry)) idx)
     (when entry (setq idx (npm-market--tablist-index sym)))
     (if entry (aref entry idx) nil)))
 
-(defun npm-market--tablist-width (sym)
+(defun npm-market--tablist-format-width (sym)
   "Return the width for SYM in `npm-market--tablist-format'."
   (nth 1 (aref npm-market--tablist-format (npm-market--tablist-index sym))))
 
+(defun npm-market--tablist-width (sym)
+  "Return the width for SYM in buffer."
+  (let ((format-width (npm-market--tablist-format-width sym))
+        (buffer-width (length (npm-market--tablist-get-value sym))))
+    (+ (max format-width buffer-width) tabulated-list-padding)))
+
+(defun npm-market--tablist-width-index (index)
+  "The same as `npm-market--tablist-width' but passing INDEX instead of symbol."
+  (npm-market--tablist-width (npm-market--tablist-symbol index)))
+
 (defun npm-market--tablist-column (sym)
-  ""
-  (let ((col tabulated-list-padding))
-    (mapcar
-     (lambda (item)
-       (setq col (+ col (nth 1 item))))
-     npm-market--tablist-format)
+  "Return column by SYM."
+  (let ((cnt (npm-market--tablist-index sym)) (index 0) (col tabulated-list-padding))
+    (while (< index cnt)
+      (setq col (+ col (npm-market--tablist-width-index index)))
+      (setq index (1+ index)))
     col))
 
 (defun npm-market--get-input ()
@@ -229,7 +257,7 @@ ADD-DEL-NUM : Addition or deletion number."
 (defun npm-market--get-entries ()
   "Get entries for `tabulated-list'."
   (let ((entries '()) (id-count 0))
-    (mapcar
+    (mapc
      (lambda (item)
        (let ((new-entry '()) (new-entry-value '())
              (name (gethash "name" item))
@@ -237,10 +265,10 @@ ADD-DEL-NUM : Addition or deletion number."
              (status "available")
              (description (gethash "description" item))
              (date (gethash "date" item))
-             (author (gethash "author" item)))
-         (setq author (gethash "name" author))
+             (publisher (gethash "publisher" item)))
+         (setq publisher (gethash "username" publisher))
          (push date new-entry-value)  ; Date
-         (push author new-entry-value)  ; Published
+         (push publisher new-entry-value)  ; Published
          (push description new-entry-value)  ; Description
          (push status new-entry-value)  ; Status
          (push version new-entry-value)  ; Version

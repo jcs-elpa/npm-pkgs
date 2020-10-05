@@ -7,7 +7,7 @@
 ;; Description: A npm packages client.
 ;; Keyword: npm packages client
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "27.1") (request "0.3.0"))
+;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
 ;; URL: https://github.com/jcs-elpa/npm-market
 
 ;; This file is NOT part of GNU Emacs.
@@ -37,6 +37,7 @@
 
 (require 'dom)
 (require 'request)
+(require 's)
 
 (defgroup npm-market nil
   "A npm packages client."
@@ -56,11 +57,16 @@
 (defvar npm-market--data nil
   "Use to store package list data.")
 
+(defvar npm-market--buffer nil
+  "Record the buffer that calls `npm-market'.")
+
 ;;; Util
 
 (defun npm-market--project-roort ()
   "Return project root path."
   (cdr (project-current)))
+
+;;; Global
 
 ;;; Local
 
@@ -78,9 +84,9 @@
     (dolist (plst data)
       (setq p-name (car plst) p-value (cdr plst))
       (when (string= p-name "dependencies")
-        (dolist (dev-dep p-value)
-          (push (list :name (car dev-dep)
-                      :version (cdr dev-dep)
+        (dolist (dep p-value)
+          (push (list :name (symbol-name (car dep))
+                      :version (s-replace "^" "" (cdr dep))
                       :status "dependencies")
                 dep-lst))))
     dep-lst))
@@ -92,8 +98,8 @@
       (setq p-name (car plst) p-value (cdr plst))
       (when (string= p-name "devDependencies")
         (dolist (dev-dep p-value)
-          (push (list :name (car dev-dep)
-                      :version (cdr dev-dep)
+          (push (list :name (symbol-name (car dev-dep))
+                      :version (s-replace "^" "" (cdr dev-dep))
                       :status "devDependencies")
                 dev-dep-lst))))
     dev-dep-lst))
@@ -106,13 +112,7 @@
     (let* ((data (npm-market--local-json))
            (dep (npm-market--get-dep data))
            (dev-dep (npm-market--get-dev-dep data)))
-      (message "dep: %s" dep)
-      (message "dev-dep: %s" dev-dep)
-      ;; (push (list :name "name"
-      ;;             :version "0.0.1"
-      ;;             :status "dev")
-      ;;       npm-market--local-packages)
-      )))
+      (setq npm-market--local-packages (append dep dev-dep)))))
 
 ;;; Core
 
@@ -182,10 +182,10 @@
 ;;; Buffer
 
 (defconst npm-market--tablist-format
-  (vector (list "Name" 15 t)
-          (list "Version" 8 t)
-          (list "Status" 10)
-          (list "Description" 40 t)
+  (vector (list "Name" 14 t)
+          (list "Version" 7 t)
+          (list "Status" 15)
+          (list "Description" 50 t)
           (list "Published" 15)
           (list "Date" 15 t))
   "Format to assign to `tabulated-list-format' variable.")
@@ -222,7 +222,6 @@
         (lambda () (interactive) (npm-market--input key-str))))
     (define-key map (kbd "<backspace>")
       (lambda () (interactive) (npm-market--input "" -1)))
-    (define-key map (kbd "<return>") #'npm-market--confirm)
     map)
   "Kaymap for `npm-market-mode'.")
 
@@ -292,16 +291,21 @@ ADD-DEL-NUM : Addition or deletion number."
   (when (> (length npm-market--title-prefix) (length tabulated-list--header-string))
     (setq tabulated-list--header-string npm-market--title-prefix))
   (tabulated-list-revert)
-  (tabulated-list-print-fake-header))
+  (tabulated-list-print-fake-header)
+  (when (timerp npm-market--refresh-timer) (cancel-timer npm-market--refresh-timer))
+  (setq npm-market--refresh-timer
+        (run-with-timer npm-market-delay nil #'npm-market--confirm)))
 
 (defun npm-market--confirm ()
   "Confirm to search for npm packages."
   (interactive)
-  (let ((input (npm-market--get-input)))
-    (unless (string-empty-p input) (npm-market--search input))))
+  (let ((input (npm-market--get-input))) (npm-market--search input)))
 
 (defun npm-market--get-entries ()
   "Get entries for `tabulated-list'."
+  (progn  ; Initialize
+    (with-current-buffer npm-market--buffer
+      (npm-market--local-collect)))
   (let ((entries '()) (id-count 0))
     (mapc
      (lambda (item)
@@ -325,6 +329,25 @@ ADD-DEL-NUM : Addition or deletion number."
          (push new-entry entries)
          (setq id-count (1+ id-count))))
      npm-market--data)
+    (dolist (item npm-market--local-packages)
+      (let ((new-entry '()) (new-entry-value '())
+            (name (plist-get item :name))
+            (version (plist-get item :version))
+            (status (plist-get item :status))
+            (description "")
+            (date "")
+            (publisher ""))
+        (push date new-entry-value)  ; Date
+        (push publisher new-entry-value)  ; Published
+        (push description new-entry-value)  ; Description
+        (push status new-entry-value)  ; Status
+        (push version new-entry-value)  ; Version
+        (push name new-entry-value)  ; Name
+        ;; ---
+        (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
+        (push (number-to-string id-count) new-entry)  ; ID
+        (push new-entry entries)
+        (setq id-count (1+ id-count))))
     (reverse entries)))
 
 (define-derived-mode npm-market-mode tabulated-list-mode
@@ -336,8 +359,7 @@ ADD-DEL-NUM : Addition or deletion number."
   (setq tabulated-list--header-string npm-market--title-prefix)
   (setq tabulated-list-sort-key (cons "Status" nil))
   (tabulated-list-init-header)
-  ;;(setq tabulated-list-entries (npm-market--get-entries))
-  (setq tabulated-list-entries nil)
+  (setq tabulated-list-entries (npm-market--get-entries))
   (tabulated-list-print t)
   (tabulated-list-print-fake-header))
 
@@ -345,6 +367,7 @@ ADD-DEL-NUM : Addition or deletion number."
 (defun npm-market ()
   "Search npm packages."
   (interactive)
+  (setq npm-market--buffer (current-buffer))
   (pop-to-buffer npm-market--buffer-name nil)
   (npm-market-mode))
 

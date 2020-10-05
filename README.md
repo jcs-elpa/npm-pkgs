@@ -1,7 +1,7 @@
-[![Build Status](https://travis-ci.com/jcs-elpa/npm-market.svg?branch=master)](https://travis-ci.com/jcs-elpa/npm-market)
+[![Build Status](https://travis-ci.com/jcs-elpa/npm-pkgs.svg?branch=master)](https://travis-ci.com/jcs-elpa/npm-pkgs)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-# npm-market
+# npm-pkgs
 > A npm packages client.
 
 ## Contribution

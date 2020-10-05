@@ -1,4 +1,4 @@
-;;; npm-market.el --- A npm packages client  -*- lexical-binding: t; -*-
+;;; npm-pkgs.el --- A npm packages client  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2020  Shen, Jen-Chieh
 ;; Created date 2020-10-05 17:24:59
@@ -8,7 +8,7 @@
 ;; Keyword: npm packages client
 ;; Version: 0.0.1
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
-;; URL: https://github.com/jcs-elpa/npm-market
+;; URL: https://github.com/jcs-elpa/npm-pkgs
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -39,30 +39,30 @@
 (require 'request)
 (require 's)
 
-(defgroup npm-market nil
+(defgroup npm-pkgs nil
   "A npm packages client."
-  :prefix "npm-market-"
+  :prefix "npm-pkgs-"
   :group 'tool
-  :link '(url-link :tag "Repository" "https://github.com/jcs-elpa/npm-market"))
+  :link '(url-link :tag "Repository" "https://github.com/jcs-elpa/npm-pkgs"))
 
-(defconst npm-market-url "https://www.npmjs.com/search/"
+(defconst npm-pkgs-url "https://www.npmjs.com/search/"
   "Npm packages url.")
 
-(defconst npm-market--url-format (format "%ssuggestions?q=%%s" npm-market-url)
+(defconst npm-pkgs--url-format (format "%ssuggestions?q=%%s" npm-pkgs-url)
   "URL format to request NPM packages by search.")
 
-(defvar npm-market--request nil
+(defvar npm-pkgs--request nil
   "Store request object.")
 
-(defvar npm-market--data nil
+(defvar npm-pkgs--data nil
   "Use to store package list data.")
 
-(defvar npm-market--buffer nil
-  "Record the buffer that calls `npm-market'.")
+(defvar npm-pkgs--buffer nil
+  "Record the buffer that calls `npm-pkgs'.")
 
 ;;; Util
 
-(defun npm-market--project-roort ()
+(defun npm-pkgs--project-roort ()
   "Return project root path."
   (cdr (project-current)))
 
@@ -70,15 +70,15 @@
 
 ;;; Local
 
-(defvar npm-market--local-packages nil
+(defvar npm-pkgs--local-packages nil
   "List of local packages.")
 
-(defun npm-market--local-json ()
+(defun npm-pkgs--local-json ()
   "Return JSON from current `package.json' file."
-  (let ((pkg-path (f-join (npm-market--project-roort) "package.json")))
+  (let ((pkg-path (f-join (npm-pkgs--project-roort) "package.json")))
     (if (file-exists-p pkg-path) (json-read-file pkg-path) nil)))
 
-(defun npm-market--get-dep (data)
+(defun npm-pkgs--get-dep (data)
   "Get dependency list from DATA."
   (let ((dep-lst '()) p-name p-value)
     (dolist (plst data)
@@ -91,7 +91,7 @@
                 dep-lst))))
     dep-lst))
 
-(defun npm-market--get-dev-dep (data)
+(defun npm-pkgs--get-dev-dep (data)
   "Get development dependency list from DATA."
   (let ((dev-dep-lst '()) p-name p-value)
     (dolist (plst data)
@@ -104,84 +104,84 @@
                 dev-dep-lst))))
     dev-dep-lst))
 
-(defun npm-market--local-collect ()
+(defun npm-pkgs--local-collect ()
   "Collect local package data."
-  (if (not (npm-market--project-roort))
+  (if (not (npm-pkgs--project-roort))
       (user-error "[WARNINGS] No project root detected")
-    (setq npm-market--local-packages '())
-    (let* ((data (npm-market--local-json))
-           (dep (npm-market--get-dep data))
-           (dev-dep (npm-market--get-dev-dep data)))
-      (setq npm-market--local-packages (append dep dev-dep)))))
+    (setq npm-pkgs--local-packages '())
+    (let* ((data (npm-pkgs--local-json))
+           (dep (npm-pkgs--get-dep data))
+           (dev-dep (npm-pkgs--get-dev-dep data)))
+      (setq npm-pkgs--local-packages (append dep dev-dep)))))
 
 ;;; Core
 
-(defun npm-market-reset-request ()
+(defun npm-pkgs-reset-request ()
   "Cancel the current request and set to initialized state."
-  (when npm-market--request (request-abort npm-market--request))
-  (setq npm-market--request nil))
+  (when npm-pkgs--request (request-abort npm-pkgs--request))
+  (setq npm-pkgs--request nil))
 
-(defun npm-market--search (text)
+(defun npm-pkgs--search (text)
   "Search npm suggested packages list by TEXT."
-  (npm-market-reset-request)
-  (setq npm-market--request
+  (npm-pkgs-reset-request)
+  (setq npm-pkgs--request
         (request
-          (format npm-market--url-format text)
+          (format npm-pkgs--url-format text)
           :type "GET"
           :parser 'buffer-string
           :success
           (cl-function
            (lambda (&key data &allow-other-keys)
-             (setq npm-market--data (json-parse-string data))
-             (npm-market--refresh)
-             (npm-market-reset-request)))
+             (setq npm-pkgs--data (json-parse-string data))
+             (npm-pkgs--refresh)
+             (npm-pkgs-reset-request)))
           :error
           ;; NOTE: Accept, error.
           (cl-function
            (lambda (&rest args &key _error-thrown &allow-other-keys)
-             (npm-market-reset-request))))))
+             (npm-pkgs-reset-request))))))
 
 ;;; Button
 
-(define-button-type 'npm-market--name-button
-  'action 'npm-market--button-name)
+(define-button-type 'npm-pkgs--name-button
+  'action 'npm-pkgs--button-name)
 
-(define-button-type 'npm-market--author-button
-  'action 'npm-market--button-author)
+(define-button-type 'npm-pkgs--author-button
+  'action 'npm-pkgs--button-author)
 
-(defun npm-market--button-name (_button)
+(defun npm-pkgs--button-name (_button)
   "Click on name."
-  (let ((pkg-name (npm-market--tablist-get-value 'name)))
+  (let ((pkg-name (npm-pkgs--tablist-get-value 'name)))
     (when pkg-name
       (browse-url (format "https://www.npmjs.com/package/%s" pkg-name)))))
 
-(defun npm-market--button-author (_button)
+(defun npm-pkgs--button-author (_button)
   "Click on published."
-  (let ((author (npm-market--tablist-get-value 'author)))
+  (let ((author (npm-pkgs--tablist-get-value 'author)))
     (when author
       (browse-url (format "https://www.npmjs.com/~%s" author)))))
 
-(defun npm-market--make-buttons ()
+(defun npm-pkgs--make-buttons ()
   "Make button to npm client."
   (save-excursion
     (goto-char (point-min))
     (while (not (eobp))
-      (let ((name-pkg (npm-market--tablist-get-value 'name))
-            (name-author (npm-market--tablist-get-value 'author)))
+      (let ((name-pkg (npm-pkgs--tablist-get-value 'name))
+            (name-author (npm-pkgs--tablist-get-value 'author)))
         (when name-pkg
-          (move-to-column (npm-market--tablist-column 'name))
+          (move-to-column (npm-pkgs--tablist-column 'name))
           (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
                        (+ (point) (length name-pkg))
-                       :type 'npm-market--name-button)
-          (move-to-column (npm-market--tablist-column 'author))
+                       :type 'npm-pkgs--name-button)
+          (move-to-column (npm-pkgs--tablist-column 'author))
           (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
                        (+ (point) (length name-author))
-                       :type 'npm-market--author-button)))
+                       :type 'npm-pkgs--author-button)))
       (forward-line 1))))
 
 ;;; Buffer
 
-(defconst npm-market--tablist-format
+(defconst npm-pkgs--tablist-format
   (vector (list "Name" 14 t)
           (list "Version" 7 t)
           (list "Status" 15)
@@ -190,18 +190,18 @@
           (list "Date" 15 t))
   "Format to assign to `tabulated-list-format' variable.")
 
-(defconst npm-market--buffer-name "*npm-market*"
+(defconst npm-pkgs--buffer-name "*npm-pkgs*"
   "Name of the buffer to display npm packages.")
 
-(defconst npm-market--title-prefix "Keywords: "
+(defconst npm-pkgs--title-prefix "Keywords: "
   "Header put infront of the input string.")
 
-(defcustom npm-market-delay 0.5
+(defcustom npm-pkgs-delay 0.5
   "Input delay to refresh buffer."
   :type 'float
-  :group 'npm-market)
+  :group 'npm-pkgs)
 
-(defconst npm-market--key-list
+(defconst npm-pkgs--key-list
   '("a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
     "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
     "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
@@ -212,73 +212,73 @@
     "?" "|" " ")
   "List of key to bind.")
 
-(defvar-local npm-market--refresh-timer nil
+(defvar-local npm-pkgs--refresh-timer nil
   "Store refresh timer function.")
 
-(defvar npm-market-mode-map
+(defvar npm-pkgs-mode-map
   (let ((map (make-sparse-keymap)))
-    (dolist (key-str npm-market--key-list)
+    (dolist (key-str npm-pkgs--key-list)
       (define-key map key-str
-        (lambda () (interactive) (npm-market--input key-str))))
+        (lambda () (interactive) (npm-pkgs--input key-str))))
     (define-key map (kbd "<backspace>")
-      (lambda () (interactive) (npm-market--input "" -1)))
+      (lambda () (interactive) (npm-pkgs--input "" -1)))
     map)
-  "Kaymap for `npm-market-mode'.")
+  "Kaymap for `npm-pkgs-mode'.")
 
-(defun npm-market--tablist-index (sym)
+(defun npm-pkgs--tablist-index (sym)
   "Return index id by SYM."
   (cl-case sym
     (name 0) (version 1) (status 2) (description 3) (author 4) (date 5)))
 
-(defun npm-market--tablist-symbol (index)
+(defun npm-pkgs--tablist-symbol (index)
   "Return symbol id by INDEX."
   (cl-case index
     (0 'name) (1 'version) (2 'status) (3 'description) (4 'author) (5 'date)))
 
-(defun npm-market--tablist-get-value (sym)
+(defun npm-pkgs--tablist-get-value (sym)
   "Get value by SYM."
   (let ((entry (tabulated-list-get-entry)) idx)
-    (when entry (setq idx (npm-market--tablist-index sym)))
+    (when entry (setq idx (npm-pkgs--tablist-index sym)))
     (if entry (aref entry idx) nil)))
 
-(defun npm-market--tablist-format-width (sym)
-  "Return the width for SYM in `npm-market--tablist-format'."
-  (nth 1 (aref npm-market--tablist-format (npm-market--tablist-index sym))))
+(defun npm-pkgs--tablist-format-width (sym)
+  "Return the width for SYM in `npm-pkgs--tablist-format'."
+  (nth 1 (aref npm-pkgs--tablist-format (npm-pkgs--tablist-index sym))))
 
-(defun npm-market--tablist-width (sym)
+(defun npm-pkgs--tablist-width (sym)
   "Return the width for SYM in buffer."
-  (let ((format-width (npm-market--tablist-format-width sym))
-        (buffer-width (length (npm-market--tablist-get-value sym))))
+  (let ((format-width (npm-pkgs--tablist-format-width sym))
+        (buffer-width (length (npm-pkgs--tablist-get-value sym))))
     (+ (max format-width buffer-width) tabulated-list-padding)))
 
-(defun npm-market--tablist-width-index (index)
-  "The same as `npm-market--tablist-width' but passing INDEX instead of symbol."
-  (npm-market--tablist-width (npm-market--tablist-symbol index)))
+(defun npm-pkgs--tablist-width-index (index)
+  "The same as `npm-pkgs--tablist-width' but passing INDEX instead of symbol."
+  (npm-pkgs--tablist-width (npm-pkgs--tablist-symbol index)))
 
-(defun npm-market--tablist-column (sym)
+(defun npm-pkgs--tablist-column (sym)
   "Return column by SYM."
-  (let ((cnt (npm-market--tablist-index sym)) (index 0) (col tabulated-list-padding))
+  (let ((cnt (npm-pkgs--tablist-index sym)) (index 0) (col tabulated-list-padding))
     (while (< index cnt)
-      (setq col (+ col (npm-market--tablist-width-index index)))
+      (setq col (+ col (npm-pkgs--tablist-width-index index)))
       (setq index (1+ index)))
     col))
 
-(defun npm-market--get-input ()
+(defun npm-pkgs--get-input ()
   "Get the input string."
   (substring tabulated-list--header-string
-             (length npm-market--title-prefix)
+             (length npm-pkgs--title-prefix)
              (length tabulated-list--header-string)))
 
-(defun npm-market--refresh ()
+(defun npm-pkgs--refresh ()
   "Do refresh list."
-  (when (get-buffer npm-market--buffer-name)
-    (with-current-buffer npm-market--buffer-name
-      (setq tabulated-list-entries (npm-market--get-entries))
+  (when (get-buffer npm-pkgs--buffer-name)
+    (with-current-buffer npm-pkgs--buffer-name
+      (setq tabulated-list-entries (npm-pkgs--get-entries))
       (tabulated-list-revert)
       (tabulated-list-print-fake-header)
-      (npm-market--make-buttons))))
+      (npm-pkgs--make-buttons))))
 
-(defun npm-market--input (key-input &optional add-del-num)
+(defun npm-pkgs--input (key-input &optional add-del-num)
   "Insert key KEY-INPUT for fake header for input bar.
 ADD-DEL-NUM : Addition or deletion number."
   (unless add-del-num (setq add-del-num (length key-input)))
@@ -288,24 +288,24 @@ ADD-DEL-NUM : Addition or deletion number."
     (setq tabulated-list--header-string
           (substring tabulated-list--header-string 0 (1- (length tabulated-list--header-string)))))
   ;; NOTE: Ensure title exists.
-  (when (> (length npm-market--title-prefix) (length tabulated-list--header-string))
-    (setq tabulated-list--header-string npm-market--title-prefix))
+  (when (> (length npm-pkgs--title-prefix) (length tabulated-list--header-string))
+    (setq tabulated-list--header-string npm-pkgs--title-prefix))
   (tabulated-list-revert)
   (tabulated-list-print-fake-header)
-  (when (timerp npm-market--refresh-timer) (cancel-timer npm-market--refresh-timer))
-  (setq npm-market--refresh-timer
-        (run-with-timer npm-market-delay nil #'npm-market--confirm)))
+  (when (timerp npm-pkgs--refresh-timer) (cancel-timer npm-pkgs--refresh-timer))
+  (setq npm-pkgs--refresh-timer
+        (run-with-timer npm-pkgs-delay nil #'npm-pkgs--confirm)))
 
-(defun npm-market--confirm ()
+(defun npm-pkgs--confirm ()
   "Confirm to search for npm packages."
   (interactive)
-  (let ((input (npm-market--get-input))) (npm-market--search input)))
+  (let ((input (npm-pkgs--get-input))) (npm-pkgs--search input)))
 
-(defun npm-market--get-entries ()
+(defun npm-pkgs--get-entries ()
   "Get entries for `tabulated-list'."
   (progn  ; Initialize
-    (with-current-buffer npm-market--buffer
-      (npm-market--local-collect)))
+    (with-current-buffer npm-pkgs--buffer
+      (npm-pkgs--local-collect)))
   (let ((entries '()) (id-count 0))
     (mapc
      (lambda (item)
@@ -328,8 +328,8 @@ ADD-DEL-NUM : Addition or deletion number."
          (push (number-to-string id-count) new-entry)  ; ID
          (push new-entry entries)
          (setq id-count (1+ id-count))))
-     npm-market--data)
-    (dolist (item npm-market--local-packages)
+     npm-pkgs--data)
+    (dolist (item npm-pkgs--local-packages)
       (let ((new-entry '()) (new-entry-value '())
             (name (plist-get item :name))
             (version (plist-get item :version))
@@ -350,26 +350,26 @@ ADD-DEL-NUM : Addition or deletion number."
         (setq id-count (1+ id-count))))
     (reverse entries)))
 
-(define-derived-mode npm-market-mode tabulated-list-mode
-  "npm-market-mode"
-  "Major mode for npm market."
-  :group 'npm-market
-  (setq tabulated-list-format npm-market--tablist-format)
+(define-derived-mode npm-pkgs-mode tabulated-list-mode
+  "npm-pkgs-mode"
+  "Major mode for npm pkgs."
+  :group 'npm-pkgs
+  (setq tabulated-list-format npm-pkgs--tablist-format)
   (setq tabulated-list-padding 1)
-  (setq tabulated-list--header-string npm-market--title-prefix)
+  (setq tabulated-list--header-string npm-pkgs--title-prefix)
   (setq tabulated-list-sort-key (cons "Status" nil))
   (tabulated-list-init-header)
-  (setq tabulated-list-entries (npm-market--get-entries))
+  (setq tabulated-list-entries (npm-pkgs--get-entries))
   (tabulated-list-print t)
   (tabulated-list-print-fake-header))
 
 ;;;###autoload
-(defun npm-market ()
+(defun npm-pkgs ()
   "Search npm packages."
   (interactive)
-  (setq npm-market--buffer (current-buffer))
-  (pop-to-buffer npm-market--buffer-name nil)
-  (npm-market-mode))
+  (setq npm-pkgs--buffer (current-buffer))
+  (pop-to-buffer npm-pkgs--buffer-name nil)
+  (npm-pkgs-mode))
 
-(provide 'npm-market)
-;;; npm-market.el ends here
+(provide 'npm-pkgs)
+;;; npm-pkgs.el ends here

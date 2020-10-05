@@ -1,3 +1,3 @@
 (source melpa)
 
-(package-file "npm-market.el")
+(package-file "npm-pkgs.el")

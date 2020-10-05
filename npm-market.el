@@ -64,9 +64,55 @@
 
 ;;; Local
 
+(defvar npm-market--local-packages nil
+  "List of local packages.")
+
 (defun npm-market--local-json ()
   "Return JSON from current `package.json' file."
-  (json-read-file (f-join (npm-market--project-roort) "package.json")))
+  (let ((pkg-path (f-join (npm-market--project-roort) "package.json")))
+    (if (file-exists-p pkg-path) (json-read-file pkg-path) nil)))
+
+(defun npm-market--get-dep (data)
+  "Get dependency list from DATA."
+  (let ((dep-lst '()) p-name p-value)
+    (dolist (plst data)
+      (setq p-name (car plst) p-value (cdr plst))
+      (when (string= p-name "dependencies")
+        (dolist (dev-dep p-value)
+          (push (list :name (car dev-dep)
+                      :version (cdr dev-dep)
+                      :status "dependencies")
+                dep-lst))))
+    dep-lst))
+
+(defun npm-market--get-dev-dep (data)
+  "Get development dependency list from DATA."
+  (let ((dev-dep-lst '()) p-name p-value)
+    (dolist (plst data)
+      (setq p-name (car plst) p-value (cdr plst))
+      (when (string= p-name "devDependencies")
+        (dolist (dev-dep p-value)
+          (push (list :name (car dev-dep)
+                      :version (cdr dev-dep)
+                      :status "devDependencies")
+                dev-dep-lst))))
+    dev-dep-lst))
+
+(defun npm-market--local-collect ()
+  "Collect local package data."
+  (if (not (npm-market--project-roort))
+      (user-error "[WARNINGS] No project root detected")
+    (setq npm-market--local-packages '())
+    (let* ((data (npm-market--local-json))
+           (dep (npm-market--get-dep data))
+           (dev-dep (npm-market--get-dev-dep data)))
+      (message "dep: %s" dep)
+      (message "dev-dep: %s" dev-dep)
+      ;; (push (list :name "name"
+      ;;             :version "0.0.1"
+      ;;             :status "dev")
+      ;;       npm-market--local-packages)
+      )))
 
 ;;; Core
 

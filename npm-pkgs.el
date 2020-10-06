@@ -590,12 +590,15 @@ If TAG is nil; clean all instead."
   (npm-pkgs--clean-hash)
   (dolist (tag (hash-table-keys npm-pkgs--entre-table))
     (dolist (entry (gethash tag npm-pkgs--entre-table))
-      (let ((status (npm-pkgs--tablist-get-value 'status)))
+      (let ((pkg-name (npm-pkgs--tablist-get-value 'name entry))
+            (status (npm-pkgs--tablist-get-value 'status entry)))
         (cl-case tag
-          (D (npm-pkgs--uninstall-command ()))
-          )
-        )
-      )))
+          (D (npm-pkgs--uninstall-pkg pkg-name
+                                      (cond ((string= status "workspace") 'local)
+                                            ((string= status "global") 'global))))
+          (L (npm-pkgs--install-pkg pkg-name 'local))
+          (G (npm-pkgs--install-pkg pkg-name 'global))
+          (V (npm-pkgs--install-pkg pkg-name 'dev)))))))
 
 (defun npm-pkgs--ask-install-pkg (pkg-name)
   "Ask to mark install package by PKG-NAME."
@@ -631,14 +634,14 @@ If TAG is nil; clean all instead."
   "Install package by PKG-NAME and TYPE."
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--install-command type) pkg-name)
-   (lambda (output)
+   (lambda (_output)
      )))
 
-(defun npm-pkgs--delete-pkg (pkg-name type)
-  ""
+(defun npm-pkgs--uninstall-pkg (pkg-name type)
+  "Uninstall package by PKG-NAME and TYPE."
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--uninstall-command type) pkg-name)
-   (lambda (output)
+   (lambda (_output)
      ))
   )
 

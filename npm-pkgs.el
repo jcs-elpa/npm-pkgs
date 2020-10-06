@@ -69,6 +69,10 @@
   "Return project root path."
   (cdr (project-current)))
 
+(defun npm-pkgs--kill-process (proc)
+  "Safe way to kill PROC."
+  (when (processp proc) (kill-process proc)))
+
 (defun npm-pkgs--async-shell-command-to-string (command callback)
   "Execute shell command COMMAND asynchronously in the background.
 
@@ -96,8 +100,8 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (let ((ln-str (split-string output "\n")) (result '())
         sec-lst pkg-name pkg-version str-len ver-len)
     (dolist (ln ln-str)
-      (when (and (string-match-p "+-- " ln) (not (string-match-p "UNMET" ln)))
-        (setq ln (s-replace "+-- " "" ln)
+      (when (and (string-match-p "[+`]-- " ln) (not (string-match-p "UNMET" ln)))
+        (setq ln (s-replace-regexp "[+`]-- " "" ln)
               sec-lst (split-string ln "@" t)
               str-len (length ln)
               ver-len (length sec-lst)
@@ -116,18 +120,22 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--global-packages nil
   "List of global packages.")
 
-(defvar npm-pkgs--global-process nil
-  "")
+(defvar npm-pkgs--global-processing-p nil
+  "Flag to see if we are currently getting global packages information.")
 
 (defun npm-pkgs--global-collect ()
   "Collect global package data."
-  (npm-pkgs--async-shell-command-to-string
-   npm-pkgs--global-command
-   (lambda (process output)
-     (let ((result (npm-pkgs--collect output t)))
-       (unless (equal npm-pkgs--global-packages result)
-         (setq npm-pkgs--global-packages result)
-         (npm-pkgs--refresh))))))
+  (unless npm-pkgs--global-processing-p
+    (setq npm-pkgs--global-processing-p t)
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--global-command
+     (lambda (process output)
+       (setq npm-pkgs--global-process process)
+       (let ((result (npm-pkgs--collect output t)))
+         (unless (equal npm-pkgs--global-packages result)
+           (setq npm-pkgs--global-packages result)
+           (npm-pkgs--refresh)
+           (setq npm-pkgs--global-processing-p nil)))))))
 
 ;;; Local
 
@@ -137,18 +145,22 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--local-packages nil
   "List of local packages.")
 
-(defvar npm-pkgs--local-process nil
-  "")
+(defvar npm-pkgs--local-processing-p nil
+  "Flag to see if we are currently getting local packages information.")
 
 (defun npm-pkgs--local-collect ()
   "Collect local package data."
-  (npm-pkgs--async-shell-command-to-string
-   npm-pkgs--local-command
-   (lambda (process output)
-     (let ((result (npm-pkgs--collect output nil)))
-       (unless (equal npm-pkgs--local-packages result)
-         (setq npm-pkgs--local-packages result)
-         (npm-pkgs--refresh))))))
+  (unless npm-pkgs--local-processing-p
+    (setq npm-pkgs--local-processing-p t)
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--local-command
+     (lambda (process output)
+       (setq npm-pkgs--local-process process)
+       (let ((result (npm-pkgs--collect output nil)))
+         (unless (equal npm-pkgs--local-packages result)
+           (setq npm-pkgs--local-packages result)
+           (npm-pkgs--refresh)
+           (setq npm-pkgs--local-processing-p nil)))))))
 
 ;;; Core
 
@@ -210,11 +222,10 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
                        (+ (point) (length name-pkg))
                        :type 'npm-pkgs--name-button)
           (move-to-column (npm-pkgs--tablist-column 'author))
-          ;; TODO: Make button for `author'.
-          ;; (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
-          ;;              (+ (point) (length name-author))
-          ;;              :type 'npm-pkgs--author-button)
-          ))
+          (when (thing-at-point 'symbol)
+            (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
+                         (+ (point) (length name-author))
+                         :type 'npm-pkgs--author-button))))
       (forward-line 1))))
 
 ;;; Buffer
@@ -394,7 +405,7 @@ ADD-DEL-NUM : Addition or deletion number."
         (push (number-to-string npm-pkgs--tablist-id) new-entry)  ; ID
         (push new-entry entries)
         (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
-    (reverse entries)))
+    entries))
 
 (defun npm-pkgs--global-entries ()
   "Get list of global packages entries."

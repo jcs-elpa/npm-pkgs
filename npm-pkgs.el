@@ -101,8 +101,8 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
               sec-lst (split-string ln "@" t)
               str-len (length ln)
               ver-len (length sec-lst)
-              pkg-name (substring ln 0 (- str-len ver-len))
-              pkg-version (nth (1- ver-len) sec-lst))
+              pkg-version (nth (1- ver-len) sec-lst)
+              pkg-name (substring ln 0 (- str-len (length pkg-version) 1)))
         (push (list :name pkg-name :version pkg-version
                     :status (if global "global" "workspace"))
               result)))
@@ -123,6 +123,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
    (lambda (output)
      (let ((result (npm-pkgs--collect output t)))
        (unless (equal npm-pkgs--global-packages result)
+         (setq npm-pkgs--global-packages result)
          (npm-pkgs--refresh))))))
 
 ;;; Local

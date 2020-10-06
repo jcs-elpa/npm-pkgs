@@ -6,6 +6,10 @@
 # npm-pkgs
 > A npm packages client.
 
+<p align="center">
+  <img src="./etc/demo.png" width="929" height="540"/>
+</p>
+
 ## Usage
 
 ### Install packages online

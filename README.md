@@ -4,6 +4,12 @@
 # npm-pkgs
 > A npm packages client.
 
+## Usage
+
+### Install packages online
+
+### Auto detect workspace
+
 ## Contribution
 
 If you would like to contribute to this project, you may either

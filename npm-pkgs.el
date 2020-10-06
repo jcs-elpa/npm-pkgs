@@ -228,8 +228,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (save-excursion
     (goto-char (point-min))
     (while (not (eobp))
-      (let ((name-pkg (npm-pkgs--tablist-get-value 'name))
-            (name-author (npm-pkgs--tablist-get-value 'author)))
+      (let ((name-pkg (npm-pkgs--tablist-get-value 'name)))
         (when name-pkg
           (move-to-column (npm-pkgs--tablist-column 'name))
           (make-button (npm-pkgs--beg-column)

@@ -450,9 +450,11 @@ ADD-DEL-NUM : Addition or deletion number."
   "Search npm packages."
   (interactive)
   (setq npm-pkgs--buffer (current-buffer)
-        npm-pkgs--data nil
-        npm-pkgs--local-packages nil
-        npm-pkgs--global-packages nil)
+        npm-pkgs--data nil)
+  (setq npm-pkgs--global-processing-p nil
+        npm-pkgs--local-processing-p nil
+        npm-pkgs--global-packages nil
+        npm-pkgs--local-packages nil)
   (pop-to-buffer npm-pkgs--buffer-name nil)
   (npm-pkgs-mode))
 

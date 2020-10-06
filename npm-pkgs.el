@@ -85,7 +85,7 @@ When the command is finished, call CALLBACK with the resulting output as a strin
          (with-current-buffer output-buffer
            (let ((output-string
                   (buffer-substring-no-properties (point-min) (point-max))))
-             (funcall callback-fun output-string)))
+             (funcall callback-fun process output-string)))
          (kill-buffer output-buffer))))
     output-buffer))
 
@@ -116,11 +116,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--global-packages nil
   "List of global packages.")
 
+(defvar npm-pkgs--global-process nil
+  "")
+
 (defun npm-pkgs--global-collect ()
   "Collect global package data."
   (npm-pkgs--async-shell-command-to-string
    npm-pkgs--global-command
-   (lambda (output)
+   (lambda (process output)
      (let ((result (npm-pkgs--collect output t)))
        (unless (equal npm-pkgs--global-packages result)
          (setq npm-pkgs--global-packages result)
@@ -134,11 +137,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--local-packages nil
   "List of local packages.")
 
+(defvar npm-pkgs--local-process nil
+  "")
+
 (defun npm-pkgs--local-collect ()
   "Collect local package data."
   (npm-pkgs--async-shell-command-to-string
    npm-pkgs--local-command
-   (lambda (output)
+   (lambda (process output)
      (let ((result (npm-pkgs--collect output nil)))
        (unless (equal npm-pkgs--local-packages result)
          (setq npm-pkgs--local-packages result)

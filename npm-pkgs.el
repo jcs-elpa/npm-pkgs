@@ -51,6 +51,9 @@
 (defconst npm-pkgs--url-format (format "%ssuggestions?q=%%s" npm-pkgs-url)
   "URL format to request NPM packages by search.")
 
+(defvar npm-pkgs--version ""
+  "Store npm version.")
+
 (defvar npm-pkgs--request nil
   "Store request object.")
 
@@ -96,7 +99,9 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (let ((ln-str (split-string output "\n")) (result '())
         sec-lst pkg-name pkg-version str-len ver-len)
     (dolist (ln ln-str)
-      (when (and (string-match-p "[+`]-- " ln) (not (string-match-p "UNMET" ln)))
+      (when (and (string-match-p "[+`]-- " ln)
+                 (not (string-match-p "UNMET" ln))
+                 (not (string-match-p "(empty)" ln)))
         (setq ln (s-replace-regexp "[+`]-- " "" ln)
               sec-lst (split-string ln "@" t)
               str-len (length ln)
@@ -243,7 +248,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defconst npm-pkgs--buffer-name "*npm-pkgs*"
   "Name of the buffer to display npm packages.")
 
-(defconst npm-pkgs--title-prefix "Keywords: "
+(defvar npm-pkgs--title-prefix "Keywords: "
   "Header put infront of the input string.")
 
 (defcustom npm-pkgs-delay 0.5
@@ -278,9 +283,21 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
         (lambda () (interactive) (npm-pkgs--input key-str))))
     (define-key map (kbd "<backspace>")
       (lambda () (interactive) (npm-pkgs--input "" -1)))
-    (define-key map (kbd "<return>" #'npm-pkgs-upgrade-all))
+    (define-key map (kbd "u") #'npm-pkgs-upgrade-all)
     map)
   "Kaymap for `npm-pkgs-mode'.")
+
+(defun npm-pkgs--get-title-prefix ()
+  "Return the full title prefix."
+  (when (string-empty-p npm-pkgs--version)
+    (setq npm-pkgs--version "??.??.??")  ; NOTE: Set to something else than empty
+    (npm-pkgs--async-shell-command-to-string
+     "npm --version"
+     (lambda (output)
+       (setq npm-pkgs--version (string-trim output))
+       (setq tabulated-list--header-string (npm-pkgs--get-title-prefix))
+       (tabulated-list-print-fake-header))))
+  (format "[npm %s] %s" npm-pkgs--version npm-pkgs--title-prefix))
 
 (defun npm-pkgs--tablist-index (sym)
   "Return index id by SYM."
@@ -323,7 +340,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defun npm-pkgs--get-input ()
   "Get the input string."
   (substring tabulated-list--header-string
-             (length npm-pkgs--title-prefix)
+             (length (npm-pkgs--get-title-prefix))
              (length tabulated-list--header-string)))
 
 (defun npm-pkgs--refresh ()
@@ -347,8 +364,8 @@ ADD-DEL-NUM : Addition or deletion number."
     (setq tabulated-list--header-string
           (substring tabulated-list--header-string 0 (1- (length tabulated-list--header-string)))))
   ;; NOTE: Ensure title exists.
-  (when (> (length npm-pkgs--title-prefix) (length tabulated-list--header-string))
-    (setq tabulated-list--header-string npm-pkgs--title-prefix))
+  (when (> (length (npm-pkgs--get-title-prefix)) (length tabulated-list--header-string))
+    (setq tabulated-list--header-string (npm-pkgs--get-title-prefix)))
   (tabulated-list-revert)
   (tabulated-list-print-fake-header)
   (npm-pkgs--make-buttons)
@@ -438,7 +455,7 @@ ADD-DEL-NUM : Addition or deletion number."
   :group 'npm-pkgs
   (setq tabulated-list-format npm-pkgs--tablist-format)
   (setq tabulated-list-padding 1)
-  (setq tabulated-list--header-string npm-pkgs--title-prefix)
+  (setq tabulated-list--header-string (npm-pkgs--get-title-prefix))
   (setq tabulated-list-sort-key (cons "Status" nil))
   (tabulated-list-init-header)
   (setq tabulated-list-entries (npm-pkgs--get-entries))
@@ -461,14 +478,26 @@ ADD-DEL-NUM : Addition or deletion number."
 
 ;;; Functions
 
+(defconst npm-pkgs--cmd-install-global "npm install -g %s"
+  "Install package for global use.")
+
+(defconst npm-pkgs--cmd-install "npm install %s"
+  "Install a package.")
+
+(defconst npm-pkgs--cmd-install-dev "npm install --save-dev %s"
+  "Install package as devDependency.")
+
+(defconst npm-pkgs--cmd-install-production "npm install --production"
+  "Install everything in package.json, except devDependecies.")
+
+(defconst npm-pkgs--cmd-update-global "npm upgrade -g"
+  "Update global packages.")
+
 (defconst npm-pkgs--cmd-update-production "npm upgrade"
   "Update production packages.")
 
 (defconst npm-pkgs--cmd-update-dev "npm upgrade --dev"
   "Update dev packages.")
-
-(defconst npm-pkgs--cmd-update-dev "npm upgrade -g"
-  "Update global packages.")
 
 (defun npm-pkgs-upgrade-all ()
   "Upgrade all installed packages."

@@ -32,10 +32,12 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'cl))
+
 (require 'browse-url)
 (require 'button)
 
-(require 'cl-lib)
 (require 'dom)
 (require 'request)
 (require 's)
@@ -648,7 +650,8 @@ If TAG is nil; clean all instead."
     (dev npm-pkgs--cmd-update-dev)))
 
 (defun npm-pkgs--install-pkg (pkg-name type tag entry)
-  "Install package by PKG-NAME and TYPE."
+  "Install package by PKG-NAME and TYPE.
+Arguments TAG and ENTRY are for searching entry table."
   (message "[NPM-PKGS] Installing package `%s` as `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--install-command type) pkg-name)
@@ -659,7 +662,8 @@ If TAG is nil; clean all instead."
      (npm-pkgs--end-execution))))
 
 (defun npm-pkgs--uninstall-pkg (pkg-name type tag entry)
-  "Uninstall package by PKG-NAME and TYPE."
+  "Uninstall package by PKG-NAME and TYPE.
+Arguments TAG and ENTRY are for searching entry table."
   (message "[NPM-PKGS] Uninstalling package `%s` from `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--uninstall-command type) pkg-name)

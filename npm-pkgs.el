@@ -110,7 +110,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 ;;; Global
 
-(defconst npm-pkgs--command-list-pkgs-global "npm list -g --depth=0"
+(defconst npm-pkgs--cmd-list-pkgs-global "npm list -g --depth 0"
   "List of global packages.")
 
 (defvar npm-pkgs--global-packages nil
@@ -124,7 +124,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (unless npm-pkgs--global-processing-p
     (setq npm-pkgs--global-processing-p t)
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--command-list-pkgs-global
+     npm-pkgs--cmd-list-pkgs-global
      (lambda (output)
        (let ((result (npm-pkgs--collect output t)))
          (unless (equal npm-pkgs--global-packages result)
@@ -134,7 +134,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 ;;; Local
 
-(defconst npm-pkgs--command-list-pkgs-local "npm list --depth=0"
+(defconst npm-pkgs--cmd-list-pkgs-local "npm list --depth 0"
   "List of global packages.")
 
 (defvar npm-pkgs--local-packages nil
@@ -148,7 +148,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (unless npm-pkgs--local-processing-p
     (setq npm-pkgs--local-processing-p t)
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--command-list-pkgs-local
+     npm-pkgs--cmd-list-pkgs-local
      (lambda (output)
        (let ((result (npm-pkgs--collect output nil)))
          (unless (equal npm-pkgs--local-packages result)
@@ -278,6 +278,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
         (lambda () (interactive) (npm-pkgs--input key-str))))
     (define-key map (kbd "<backspace>")
       (lambda () (interactive) (npm-pkgs--input "" -1)))
+    (define-key map (kbd "<return>" #'npm-pkgs-upgrade-all))
     map)
   "Kaymap for `npm-pkgs-mode'.")
 
@@ -460,8 +461,14 @@ ADD-DEL-NUM : Addition or deletion number."
 
 ;;; Functions
 
-(defconst npm-pkgs--command-upgrade-all "npm upgrade"
-  "Npm upgrade command.")
+(defconst npm-pkgs--cmd-update-production "npm upgrade"
+  "Update production packages.")
+
+(defconst npm-pkgs--cmd-update-dev "npm upgrade --dev"
+  "Update dev packages.")
+
+(defconst npm-pkgs--cmd-update-dev "npm upgrade -g"
+  "Update global packages.")
 
 (defun npm-pkgs-upgrade-all ()
   "Upgrade all installed packages."

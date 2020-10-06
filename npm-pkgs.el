@@ -90,8 +90,8 @@ When the command is finished, call CALLBACK with the resulting output as a strin
   "Collect data from shell OUTPUT.
 
 If argument GLOBAL is no-nil, we find global packages instead of local packages."
-  (let ((ln-str (split-string output "\n")) sec-lst
-        pkg-name pkg-version str-len ver-len)
+  (let ((ln-str (split-string output "\n")) (result '())
+        sec-lst pkg-name pkg-version str-len ver-len)
     (dolist (ln ln-str)
       (when (and (string-match-p "+-- " ln) (not (string-match-p "UNMET" ln)))
         (setq ln (s-replace "+-- " "" ln)
@@ -100,8 +100,10 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
               ver-len (length sec-lst)
               pkg-name (substring ln 0 (- str-len ver-len))
               pkg-version (nth (1- ver-len) sec-lst))
-        (push (list :name pkg-name :version pkg-version :status "global")
-              (if global npm-pkgs--global-packages npm-pkgs--local-packages))))))
+        (push (list :name pkg-name :version pkg-version
+                    :status (if global "global" "workspace"))
+              result)))
+    result))
 
 ;;; Global
 
@@ -111,20 +113,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--global-packages nil
   "List of global packages.")
 
-(defvar npm-pkgs--global-p nil
-  "Flag to see if currently getting global packages information.")
-
 (defun npm-pkgs--global-collect ()
   "Collect global package data."
-  (unless npm-pkgs--global-p
-    (setq npm-pkgs--global-p t
-          npm-pkgs--global-packages '())
-    (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--global-command
-     (lambda (output)
-       (npm-pkgs--collect output t)
-       (npm-pkgs--refresh)
-       (setq npm-pkgs--global-p nil)))))
+  (npm-pkgs--async-shell-command-to-string
+   npm-pkgs--global-command
+   (lambda (output)
+     (let ((result (npm-pkgs--collect output t)))
+       (unless (equal npm-pkgs--global-packages result)
+         (npm-pkgs--refresh))))))
 
 ;;; Local
 
@@ -134,20 +130,15 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--local-packages nil
   "List of local packages.")
 
-(defvar npm-pkgs--local-p nil
-  "Flag to see if currently getting local packages information.")
-
 (defun npm-pkgs--local-collect ()
   "Collect local package data."
-  (unless npm-pkgs--local-p
-    (setq npm-pkgs--local-p t
-          npm-pkgs--local-packages '())
-    (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--local-command
-     (lambda (output)
-       (npm-pkgs--collect output nil)
-       (npm-pkgs--refresh)
-       (setq npm-pkgs--local-p nil)))))
+  (npm-pkgs--async-shell-command-to-string
+   npm-pkgs--local-command
+   (lambda (output)
+     (let ((result (npm-pkgs--collect output nil)))
+       (unless (equal npm-pkgs--local-packages result)
+         (setq npm-pkgs--local-packages result)
+         (npm-pkgs--refresh))))))
 
 ;;; Core
 
@@ -205,12 +196,12 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
             (name-author (npm-pkgs--tablist-get-value 'author)))
         (when name-pkg
           (move-to-column (npm-pkgs--tablist-column 'name))
-          (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
+          (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
                        (+ (point) (length name-pkg))
                        :type 'npm-pkgs--name-button)
           (move-to-column (npm-pkgs--tablist-column 'author))
           ;; TODO: Make button for `author'.
-          ;; (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
+          ;; (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
           ;;              (+ (point) (length name-author))
           ;;              :type 'npm-pkgs--author-button)
           ))
@@ -362,17 +353,16 @@ ADD-DEL-NUM : Addition or deletion number."
          (push name new-entry-value)  ; Name
          ;; ---
          (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
-         (push (number-to-string id-count) new-entry)  ; ID
+         (push (number-to-string npm-pkgs--tablist-id) new-entry)  ; ID
          (push new-entry entries)
          (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
      npm-pkgs--data)
     (reverse entries)))
 
-(defun npm-pkgs--local-entries ()
-  "Get list of local packages entries."
-  (with-current-buffer npm-pkgs--buffer (npm-pkgs--local-collect))
+(defun npm-pkgs--machine-entries (pkg-lst)
+  "Get list of entries depends on PKG-LST."
   (let ((entries '()))
-    (dolist (item npm-pkgs--local-packages)
+    (dolist (item pkg-lst)
       (let ((new-entry '()) (new-entry-value '())
             (name (plist-get item :name))
             (version (plist-get item :version))
@@ -380,6 +370,8 @@ ADD-DEL-NUM : Addition or deletion number."
             (description "")
             (date "")
             (publisher ""))
+        (setq version (propertize version 'face (list :inherit font-lock-comment-face)))
+        (setq status (propertize status 'face (list :inherit font-lock-comment-face)))
         (push date new-entry-value)  ; Date
         (push publisher new-entry-value)  ; Published
         (push description new-entry-value)  ; Description
@@ -388,7 +380,7 @@ ADD-DEL-NUM : Addition or deletion number."
         (push name new-entry-value)  ; Name
         ;; ---
         (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
-        (push (number-to-string id-count) new-entry)  ; ID
+        (push (number-to-string npm-pkgs--tablist-id) new-entry)  ; ID
         (push new-entry entries)
         (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
     (reverse entries)))
@@ -396,27 +388,12 @@ ADD-DEL-NUM : Addition or deletion number."
 (defun npm-pkgs--global-entries ()
   "Get list of global packages entries."
   (with-current-buffer npm-pkgs--buffer (npm-pkgs--global-collect))
-  (let ((entries '()))
-    (dolist (item npm-pkgs--global-packages)
-      (let ((new-entry '()) (new-entry-value '())
-            (name (plist-get item :name))
-            (version (plist-get item :version))
-            (status (plist-get item :status))
-            (description "")
-            (date "")
-            (publisher ""))
-        (push date new-entry-value)  ; Date
-        (push publisher new-entry-value)  ; Published
-        (push description new-entry-value)  ; Description
-        (push status new-entry-value)  ; Status
-        (push version new-entry-value)  ; Version
-        (push name new-entry-value)  ; Name
-        ;; ---
-        (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
-        (push (number-to-string id-count) new-entry)  ; ID
-        (push new-entry entries)
-        (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
-    (reverse entries)))
+  (npm-pkgs--machine-entries npm-pkgs--global-packages))
+
+(defun npm-pkgs--local-entries ()
+  "Get list of local packages entries."
+  (with-current-buffer npm-pkgs--buffer (npm-pkgs--local-collect))
+  (npm-pkgs--machine-entries npm-pkgs--local-packages))
 
 (defun npm-pkgs--get-entries ()
   "Get entries for `tabulated-list'."

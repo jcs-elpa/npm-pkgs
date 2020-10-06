@@ -6,7 +6,7 @@
 ;; Author: Shen, Jen-Chieh <jcs090218@gmail.com>
 ;; Description: A npm packages client.
 ;; Keyword: npm packages client
-;; Version: 0.1.0
+;; Version: 1.0.0
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
 ;; URL: https://github.com/jcs-elpa/npm-pkgs
 
@@ -68,10 +68,6 @@
 (defun npm-pkgs--project-roort ()
   "Return project root path."
   (cdr (project-current)))
-
-(defun npm-pkgs--kill-process (proc)
-  "Safe way to kill PROC."
-  (when (processp proc) (kill-process proc)))
 
 (defun npm-pkgs--async-shell-command-to-string (command callback)
   "Execute shell command COMMAND asynchronously in the background.

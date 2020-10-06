@@ -353,14 +353,15 @@ If optional argument ENTRY is nil; use current entry at point instead."
              (length (npm-pkgs--get-title-prefix))
              (length tabulated-list--header-string)))
 
-(defun npm-pkgs--refresh ()
-  "Do refresh list."
+(defun npm-pkgs--refresh (&optional hl)
+  "Do refresh list.
+If optional argument HL is non-nil; do make buttons."
   (when (get-buffer npm-pkgs--buffer-name)
     (with-current-buffer npm-pkgs--buffer-name
       (setq tabulated-list-entries (npm-pkgs--get-entries))
       (tabulated-list-revert)
       (tabulated-list-print-fake-header)
-      (when npm-pkgs--tablist-refresh-p
+      (when (or npm-pkgs--tablist-refresh-p hl)
         (npm-pkgs--make-buttons)
         (setq npm-pkgs--tablist-refresh-p nil)))))
 
@@ -455,18 +456,18 @@ ADD-DEL-NUM : Addition or deletion number."
                              (npm-pkgs--local-entries)
                              (npm-pkgs--global-entries))))
     (unless (equal npm-pkgs--all-entries new-entries)
-      (setq npm-pkgs--all-entries new-entries)
-      (setq npm-pkgs--tablist-refresh-p t)))
+      (setq npm-pkgs--all-entries new-entries
+            npm-pkgs--tablist-refresh-p t)))
   npm-pkgs--all-entries)
 
 (define-derived-mode npm-pkgs-mode tabulated-list-mode
   "npm-pkgs-mode"
   "Major mode for npm pkgs."
   :group 'npm-pkgs
-  (setq tabulated-list-format npm-pkgs--tablist-format)
-  (setq tabulated-list-padding 2)
-  (setq tabulated-list--header-string (npm-pkgs--get-title-prefix))
-  (setq tabulated-list-sort-key (cons "Status" nil))
+  (setq tabulated-list-format npm-pkgs--tablist-format
+        tabulated-list-padding 2
+        tabulated-list--header-string (npm-pkgs--get-title-prefix)
+        tabulated-list-sort-key (cons "Status" nil))
   (tabulated-list-init-header)
   (setq tabulated-list-entries (npm-pkgs--get-entries))
   (tabulated-list-print t)
@@ -480,7 +481,10 @@ ADD-DEL-NUM : Addition or deletion number."
   (setq npm-pkgs--buffer (current-buffer)
         npm-pkgs--data nil
         npm-pkgs--version ""
-        npm-pkgs--entre-table (make-hash-table))
+        npm-pkgs--entre-table (make-hash-table)
+        npm-pkgs--executing-p nil
+        npm-pkgs--count-installed 0
+        npm-pkgs--count-uninstalled 0)
   (setq npm-pkgs--global-processing-p nil
         npm-pkgs--local-processing-p nil
         npm-pkgs--global-packages nil
@@ -510,6 +514,15 @@ ADD-DEL-NUM : Addition or deletion number."
   "Command to upgrade production packages.")
 (defconst npm-pkgs--cmd-update-dev "npm upgrade --dev"
   "Command to upgrade devDependency package.")
+
+(defvar npm-pkgs--executing-p nil
+  "Flag to see if we are currently executing commands.")
+
+(defvar npm-pkgs--count-installed nil
+  "Count installed packages.")
+
+(defvar npm-pkgs--count-uninstalled nil
+  "Count installed packages.")
 
 (defun npm-pkgs-upgrade-all ()
   "Upgrade all installed packages."
@@ -546,8 +559,9 @@ ADD-DEL-NUM : Addition or deletion number."
 (defun npm-pkgs--remove-entry (tag &optional entry)
   "Remove ENTRY by TAG."
   (unless entry (setq entry (tabulated-list-get-entry)))
-  (setf (gethash (intern tag) npm-pkgs--entre-table)
-        (remove entry (gethash (intern tag) npm-pkgs--entre-table))))
+  (when (stringp tag) (setq tag (intern tag)))
+  (setf (gethash tag npm-pkgs--entre-table)
+        (remove entry (gethash tag npm-pkgs--entre-table))))
 
 (defun npm-pkgs--clean-hash (&optional tag)
   "Clean the hash by TAG.
@@ -587,18 +601,21 @@ If TAG is nil; clean all instead."
 (defun npm-pkgs-execute ()
   "Execute all marked packages."
   (interactive)
-  (npm-pkgs--clean-hash)
-  (dolist (tag (hash-table-keys npm-pkgs--entre-table))
-    (dolist (entry (gethash tag npm-pkgs--entre-table))
-      (let ((pkg-name (npm-pkgs--tablist-get-value 'name entry))
-            (status (npm-pkgs--tablist-get-value 'status entry)))
-        (cl-case tag
-          (D (npm-pkgs--uninstall-pkg pkg-name
-                                      (cond ((string= status "workspace") 'local)
-                                            ((string= status "global") 'global))))
-          (L (npm-pkgs--install-pkg pkg-name 'local))
-          (G (npm-pkgs--install-pkg pkg-name 'global))
-          (V (npm-pkgs--install-pkg pkg-name 'dev)))))))
+  (unless npm-pkgs--executing-p
+    (setq npm-pkgs--executing-p t)
+    (npm-pkgs--clean-hash)
+    (dolist (tag (hash-table-keys npm-pkgs--entre-table))
+      (dolist (entry (gethash tag npm-pkgs--entre-table))
+        (let ((pkg-name (npm-pkgs--tablist-get-value 'name entry))
+              (status (npm-pkgs--tablist-get-value 'status entry)))
+          (cl-case tag
+            (D (npm-pkgs--uninstall-pkg pkg-name
+                                        (cond ((string= status "workspace") 'local)
+                                              ((string= status "global") 'global))
+                                        tag entry))
+            (L (npm-pkgs--install-pkg pkg-name 'local tag entry))
+            (G (npm-pkgs--install-pkg pkg-name 'global tag entry))
+            (V (npm-pkgs--install-pkg pkg-name 'dev tag entry))))))))
 
 (defun npm-pkgs--ask-install-pkg (pkg-name)
   "Ask to mark install package by PKG-NAME."
@@ -630,21 +647,48 @@ If TAG is nil; clean all instead."
     (local npm-pkgs--cmd-update-local)
     (dev npm-pkgs--cmd-update-dev)))
 
-(defun npm-pkgs--install-pkg (pkg-name type)
+(defun npm-pkgs--install-pkg (pkg-name type tag entry)
   "Install package by PKG-NAME and TYPE."
   (message "[NPM-PKGS] Installing package `%s` as `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--install-command type) pkg-name)
    (lambda (_output)
-     (message "[NPM-PKGS] Installed package %s" pkg-name))))
+     (message "[NPM-PKGS] Installed package %s" pkg-name)
+     (setq npm-pkgs--count-installed (1+ npm-pkgs--count-installed))
+     (npm-pkgs--remove-entry tag entry)
+     (npm-pkgs--end-execution))))
 
-(defun npm-pkgs--uninstall-pkg (pkg-name type)
+(defun npm-pkgs--uninstall-pkg (pkg-name type tag entry)
   "Uninstall package by PKG-NAME and TYPE."
   (message "[NPM-PKGS] Uninstalling package `%s` from `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--uninstall-command type) pkg-name)
    (lambda (_output)
-     (message "[NPM-PKGS] Uninstalled package %s" pkg-name))))
+     (message "[NPM-PKGS] Uninstalled package %s" pkg-name)
+     (setq npm-pkgs--count-uninstalled (1+ npm-pkgs--count-uninstalled))
+     (npm-pkgs--remove-entry tag entry)
+     (npm-pkgs--end-execution))))
+
+(defun npm-pkgs--table-empty-p ()
+  "Check if entry table empty."
+  (let ((empty t))
+    (dolist (tag (hash-table-keys npm-pkgs--entre-table))
+      (when (< 0 (length (gethash tag npm-pkgs--entre-table)))
+        (setq empty nil)))
+    empty))
+
+(defun npm-pkgs--end-execution ()
+  "Callback to see if end the execution."
+  (when (npm-pkgs--table-empty-p)
+    (setq npm-pkgs--executing-p nil)
+    (npm-pkgs--refresh t)
+    (message "[NPM-PKGS] Done execution; %s package%s installed, %s package%s removed"
+             npm-pkgs--count-installed
+             (if (<= npm-pkgs--count-installed 1) "" "s")
+             npm-pkgs--count-uninstalled
+             (if (<= npm-pkgs--count-uninstalled 1) "" "s"))
+    (setq npm-pkgs--count-installed 0
+          npm-pkgs--count-uninstalled 0)))
 
 (provide 'npm-pkgs)
 ;;; npm-pkgs.el ends here

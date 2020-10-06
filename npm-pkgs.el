@@ -66,53 +66,88 @@
   "Return project root path."
   (cdr (project-current)))
 
+(defun npm-pkgs--async-shell-command-to-string (command callback)
+  "Execute shell command COMMAND asynchronously in the background.
+
+Return the temporary output buffer which command is writing to during execution.
+
+When the command is finished, call CALLBACK with the resulting output as a string."
+  (lexical-let
+      ((output-buffer (generate-new-buffer " *temp*"))
+       (callback-fun callback))
+    (set-process-sentinel
+     (start-process "Shell" output-buffer shell-file-name shell-command-switch command)
+     (lambda (process _signal)
+       (when (memq (process-status process) '(exit signal))
+         (with-current-buffer output-buffer
+           (let ((output-string
+                  (buffer-substring-no-properties (point-min) (point-max))))
+             (funcall callback-fun output-string)))
+         (kill-buffer output-buffer))))
+    output-buffer))
+
+(defun npm-pkgs--collect (output global)
+  "Collect data from shell OUTPUT.
+
+If argument GLOBAL is no-nil, we find global packages instead of local packages."
+  (let ((ln-str (split-string output "\n")) sec-lst
+        pkg-name pkg-version str-len ver-len)
+    (dolist (ln ln-str)
+      (when (and (string-match-p "+-- " ln) (not (string-match-p "UNMET" ln)))
+        (setq ln (s-replace "+-- " "" ln)
+              sec-lst (split-string ln "@" t)
+              str-len (length ln)
+              ver-len (length sec-lst)
+              pkg-name (substring ln 0 (- str-len ver-len))
+              pkg-version (nth (1- ver-len) sec-lst))
+        (push (list :name pkg-name :version pkg-version :status "global")
+              (if global npm-pkgs--global-packages npm-pkgs--local-packages))))))
+
 ;;; Global
 
+(defconst npm-pkgs--global-command "npm list -g --depth=0"
+  "List of global packages.")
+
+(defvar npm-pkgs--global-packages nil
+  "List of global packages.")
+
+(defvar npm-pkgs--global-p nil
+  "Flag to see if currently getting global packages information.")
+
+(defun npm-pkgs--global-collect ()
+  "Collect global package data."
+  (unless npm-pkgs--global-p
+    (setq npm-pkgs--global-p t
+          npm-pkgs--global-packages '())
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--global-command
+     (lambda (output)
+       (npm-pkgs--collect output t)
+       (npm-pkgs--refresh)
+       (setq npm-pkgs--global-p nil)))))
+
 ;;; Local
+
+(defconst npm-pkgs--local-command "npm list --depth=0"
+  "List of global packages.")
 
 (defvar npm-pkgs--local-packages nil
   "List of local packages.")
 
-(defun npm-pkgs--local-json ()
-  "Return JSON from current `package.json' file."
-  (let ((pkg-path (f-join (npm-pkgs--project-roort) "package.json")))
-    (if (file-exists-p pkg-path) (json-read-file pkg-path) nil)))
-
-(defun npm-pkgs--get-dep (data)
-  "Get dependency list from DATA."
-  (let ((dep-lst '()) p-name p-value)
-    (dolist (plst data)
-      (setq p-name (car plst) p-value (cdr plst))
-      (when (string= p-name "dependencies")
-        (dolist (dep p-value)
-          (push (list :name (symbol-name (car dep))
-                      :version (s-replace "^" "" (cdr dep))
-                      :status "dependencies")
-                dep-lst))))
-    dep-lst))
-
-(defun npm-pkgs--get-dev-dep (data)
-  "Get development dependency list from DATA."
-  (let ((dev-dep-lst '()) p-name p-value)
-    (dolist (plst data)
-      (setq p-name (car plst) p-value (cdr plst))
-      (when (string= p-name "devDependencies")
-        (dolist (dev-dep p-value)
-          (push (list :name (symbol-name (car dev-dep))
-                      :version (s-replace "^" "" (cdr dev-dep))
-                      :status "devDependencies")
-                dev-dep-lst))))
-    dev-dep-lst))
+(defvar npm-pkgs--local-p nil
+  "Flag to see if currently getting local packages information.")
 
 (defun npm-pkgs--local-collect ()
   "Collect local package data."
-  (if (not (npm-pkgs--project-roort))
-      (user-error "[WARNINGS] No project root detected")
-    (setq npm-pkgs--local-packages '())
-    (let* ((data (npm-pkgs--local-json))
-           (dep (npm-pkgs--get-dep data))
-           (dev-dep (npm-pkgs--get-dev-dep data)))
-      (setq npm-pkgs--local-packages (append dep dev-dep)))))
+  (unless npm-pkgs--local-p
+    (setq npm-pkgs--local-p t
+          npm-pkgs--local-packages '())
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--local-command
+     (lambda (output)
+       (npm-pkgs--collect output nil)
+       (npm-pkgs--refresh)
+       (setq npm-pkgs--local-p nil)))))
 
 ;;; Core
 
@@ -174,9 +209,11 @@
                        (+ (point) (length name-pkg))
                        :type 'npm-pkgs--name-button)
           (move-to-column (npm-pkgs--tablist-column 'author))
-          (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
-                       (+ (point) (length name-author))
-                       :type 'npm-pkgs--author-button)))
+          ;; TODO: Make button for `author'.
+          ;; (make-button (save-excursion (forward-word 1) (forward-word -1) (point))
+          ;;              (+ (point) (length name-author))
+          ;;              :type 'npm-pkgs--author-button)
+          ))
       (forward-line 1))))
 
 ;;; Buffer
@@ -214,6 +251,9 @@
 
 (defvar-local npm-pkgs--refresh-timer nil
   "Store refresh timer function.")
+
+(defvar npm-pkgs--tablist-id 0
+  "Tabulated List Id.")
 
 (defvar npm-pkgs-mode-map
   (let ((map (make-sparse-keymap)))
@@ -301,12 +341,9 @@ ADD-DEL-NUM : Addition or deletion number."
   (interactive)
   (let ((input (npm-pkgs--get-input))) (npm-pkgs--search input)))
 
-(defun npm-pkgs--get-entries ()
-  "Get entries for `tabulated-list'."
-  (progn  ; Initialize
-    (with-current-buffer npm-pkgs--buffer
-      (npm-pkgs--local-collect)))
-  (let ((entries '()) (id-count 0))
+(defun npm-pkgs--market-entries ()
+  "Return the market entries."
+  (let ((entries '()))
     (mapc
      (lambda (item)
        (let ((new-entry '()) (new-entry-value '())
@@ -327,8 +364,14 @@ ADD-DEL-NUM : Addition or deletion number."
          (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
          (push (number-to-string id-count) new-entry)  ; ID
          (push new-entry entries)
-         (setq id-count (1+ id-count))))
+         (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
      npm-pkgs--data)
+    (reverse entries)))
+
+(defun npm-pkgs--local-entries ()
+  "Get list of local packages entries."
+  (with-current-buffer npm-pkgs--buffer (npm-pkgs--local-collect))
+  (let ((entries '()))
     (dolist (item npm-pkgs--local-packages)
       (let ((new-entry '()) (new-entry-value '())
             (name (plist-get item :name))
@@ -347,8 +390,39 @@ ADD-DEL-NUM : Addition or deletion number."
         (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
         (push (number-to-string id-count) new-entry)  ; ID
         (push new-entry entries)
-        (setq id-count (1+ id-count))))
+        (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
     (reverse entries)))
+
+(defun npm-pkgs--global-entries ()
+  "Get list of global packages entries."
+  (with-current-buffer npm-pkgs--buffer (npm-pkgs--global-collect))
+  (let ((entries '()))
+    (dolist (item npm-pkgs--global-packages)
+      (let ((new-entry '()) (new-entry-value '())
+            (name (plist-get item :name))
+            (version (plist-get item :version))
+            (status (plist-get item :status))
+            (description "")
+            (date "")
+            (publisher ""))
+        (push date new-entry-value)  ; Date
+        (push publisher new-entry-value)  ; Published
+        (push description new-entry-value)  ; Description
+        (push status new-entry-value)  ; Status
+        (push version new-entry-value)  ; Version
+        (push name new-entry-value)  ; Name
+        ;; ---
+        (push (vconcat new-entry-value) new-entry)  ; Turn into vector.
+        (push (number-to-string id-count) new-entry)  ; ID
+        (push new-entry entries)
+        (setq npm-pkgs--tablist-id (1+ npm-pkgs--tablist-id))))
+    (reverse entries)))
+
+(defun npm-pkgs--get-entries ()
+  "Get entries for `tabulated-list'."
+  (setq npm-pkgs--tablist-id 0)
+  (append (npm-pkgs--market-entries)
+          (npm-pkgs--local-entries) (npm-pkgs--global-entries)))
 
 (define-derived-mode npm-pkgs-mode tabulated-list-mode
   "npm-pkgs-mode"

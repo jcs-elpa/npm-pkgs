@@ -60,6 +60,9 @@
 (defvar npm-pkgs--buffer nil
   "Record the buffer that calls `npm-pkgs'.")
 
+(defvar npm-pkgs--all-entries nil
+  "List of all entries.")
+
 ;;; Util
 
 (defun npm-pkgs--project-roort ()
@@ -210,12 +213,11 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 ;;; Buffer
 
 (defconst npm-pkgs--tablist-format
-  (vector (list "Name" 14 t)
-          (list "Version" 7 t)
-          (list "Status" 15)
+  (vector (list "Name" 20 t)
+          (list "Version" 8 t)
+          (list "Status" 10)
           (list "Description" 50 t)
-          (list "Published" 15)
-          (list "Date" 15 t))
+          (list "Published" 15))
   "Format to assign to `tabulated-list-format' variable.")
 
 (defconst npm-pkgs--buffer-name "*npm-pkgs*"
@@ -246,6 +248,9 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defvar npm-pkgs--tablist-id 0
   "Tabulated List Id.")
 
+(defvar npm-pkgs--tablist-refresh-p nil
+  "Check if currently tablist refreshing.")
+
 (defvar npm-pkgs-mode-map
   (let ((map (make-sparse-keymap)))
     (dolist (key-str npm-pkgs--key-list)
@@ -259,12 +264,12 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defun npm-pkgs--tablist-index (sym)
   "Return index id by SYM."
   (cl-case sym
-    (name 0) (version 1) (status 2) (description 3) (author 4) (date 5)))
+    (name 0) (version 1) (status 2) (description 3) (author 4)))
 
 (defun npm-pkgs--tablist-symbol (index)
   "Return symbol id by INDEX."
   (cl-case index
-    (0 'name) (1 'version) (2 'status) (3 'description) (4 'author) (5 'date)))
+    (0 'name) (1 'version) (2 'status) (3 'description) (4 'author)))
 
 (defun npm-pkgs--tablist-get-value (sym)
   "Get value by SYM."
@@ -307,7 +312,9 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
       (setq tabulated-list-entries (npm-pkgs--get-entries))
       (tabulated-list-revert)
       (tabulated-list-print-fake-header)
-      (npm-pkgs--make-buttons))))
+      (when npm-pkgs--tablist-refresh-p
+        (npm-pkgs--make-buttons)
+        (setq npm-pkgs--tablist-refresh-p nil)))))
 
 (defun npm-pkgs--input (key-input &optional add-del-num)
   "Insert key KEY-INPUT for fake header for input bar.
@@ -323,9 +330,10 @@ ADD-DEL-NUM : Addition or deletion number."
     (setq tabulated-list--header-string npm-pkgs--title-prefix))
   (tabulated-list-revert)
   (tabulated-list-print-fake-header)
+  (npm-pkgs--make-buttons)
   (when (timerp npm-pkgs--refresh-timer) (cancel-timer npm-pkgs--refresh-timer))
   (setq npm-pkgs--refresh-timer
-        (run-with-timer npm-pkgs-delay nil #'npm-pkgs--confirm)))
+        (run-with-idle-timer npm-pkgs-delay nil #'npm-pkgs--confirm)))
 
 (defun npm-pkgs--confirm ()
   "Confirm to search for npm packages."
@@ -342,10 +350,8 @@ ADD-DEL-NUM : Addition or deletion number."
              (version (gethash "version" item))
              (status "available")
              (description (gethash "description" item))
-             (date (gethash "date" item))
              (publisher (gethash "publisher" item)))
          (setq publisher (gethash "username" publisher))
-         (push date new-entry-value)  ; Date
          (push publisher new-entry-value)  ; Published
          (push description new-entry-value)  ; Description
          (push status new-entry-value)  ; Status
@@ -368,11 +374,9 @@ ADD-DEL-NUM : Addition or deletion number."
             (version (plist-get item :version))
             (status (plist-get item :status))
             (description "")
-            (date "")
             (publisher ""))
         (setq version (propertize version 'face (list :inherit font-lock-comment-face)))
         (setq status (propertize status 'face (list :inherit font-lock-comment-face)))
-        (push date new-entry-value)  ; Date
         (push publisher new-entry-value)  ; Published
         (push description new-entry-value)  ; Description
         (push status new-entry-value)  ; Status
@@ -397,9 +401,15 @@ ADD-DEL-NUM : Addition or deletion number."
 
 (defun npm-pkgs--get-entries ()
   "Get entries for `tabulated-list'."
-  (setq npm-pkgs--tablist-id 0)
-  (append (npm-pkgs--market-entries)
-          (npm-pkgs--local-entries) (npm-pkgs--global-entries)))
+  (setq npm-pkgs--tablist-id 0
+        npm-pkgs--tablist-refresh-p nil)
+  (let ((new-entries (append (npm-pkgs--market-entries)
+                             (npm-pkgs--local-entries)
+                             (npm-pkgs--global-entries))))
+    (unless (equal npm-pkgs--all-entries new-entries)
+      (setq npm-pkgs--all-entries new-entries)
+      (setq npm-pkgs--tablist-refresh-p t)))
+  npm-pkgs--all-entries)
 
 (define-derived-mode npm-pkgs-mode tabulated-list-mode
   "npm-pkgs-mode"
@@ -412,13 +422,15 @@ ADD-DEL-NUM : Addition or deletion number."
   (tabulated-list-init-header)
   (setq tabulated-list-entries (npm-pkgs--get-entries))
   (tabulated-list-print t)
-  (tabulated-list-print-fake-header))
+  (tabulated-list-print-fake-header)
+  (npm-pkgs--make-buttons))
 
 ;;;###autoload
 (defun npm-pkgs ()
   "Search npm packages."
   (interactive)
-  (setq npm-pkgs--buffer (current-buffer))
+  (setq npm-pkgs--buffer (current-buffer)
+        npm-pkgs--data nil)
   (pop-to-buffer npm-pkgs--buffer-name nil)
   (npm-pkgs-mode))
 

@@ -216,6 +216,13 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
     (forward-char 1)
     (point)))
 
+(defun npm-pkgs--end-symbol ()
+  "Return point at the end of symbol."
+  (save-excursion
+    (re-search-forward "[ \t\r\n]" nil t)
+    (forward-char -1)
+    (point)))
+
 (defun npm-pkgs--make-buttons ()
   "Make button to npm client."
   (save-excursion
@@ -226,12 +233,12 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
         (when name-pkg
           (move-to-column (npm-pkgs--tablist-column 'name))
           (make-button (npm-pkgs--beg-column)
-                       (+ (point) (length name-pkg))
+                       (npm-pkgs--end-symbol)
                        :type 'npm-pkgs--name-button)
           (move-to-column (npm-pkgs--tablist-column 'author))
           (when (thing-at-point 'symbol)
             (make-button (npm-pkgs--beg-column)
-                         (+ (point) (length name-author))
+                         (npm-pkgs--end-symbol)
                          :type 'npm-pkgs--author-button))))
       (forward-line 1))))
 

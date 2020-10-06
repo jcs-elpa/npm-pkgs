@@ -110,7 +110,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 ;;; Global
 
-(defconst npm-pkgs--global-command "npm list -g --depth=0"
+(defconst npm-pkgs--command-list-pkgs-global "npm list -g --depth=0"
   "List of global packages.")
 
 (defvar npm-pkgs--global-packages nil
@@ -124,9 +124,8 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (unless npm-pkgs--global-processing-p
     (setq npm-pkgs--global-processing-p t)
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--global-command
-     (lambda (process output)
-       (setq npm-pkgs--global-process process)
+     npm-pkgs--command-list-pkgs-global
+     (lambda (output)
        (let ((result (npm-pkgs--collect output t)))
          (unless (equal npm-pkgs--global-packages result)
            (setq npm-pkgs--global-packages result)
@@ -135,7 +134,7 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 ;;; Local
 
-(defconst npm-pkgs--local-command "npm list --depth=0"
+(defconst npm-pkgs--command-list-pkgs-local "npm list --depth=0"
   "List of global packages.")
 
 (defvar npm-pkgs--local-packages nil
@@ -149,9 +148,8 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (unless npm-pkgs--local-processing-p
     (setq npm-pkgs--local-processing-p t)
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--local-command
-     (lambda (process output)
-       (setq npm-pkgs--local-process process)
+     npm-pkgs--command-list-pkgs-local
+     (lambda (output)
        (let ((result (npm-pkgs--collect output nil)))
          (unless (equal npm-pkgs--local-packages result)
            (setq npm-pkgs--local-packages result)
@@ -205,6 +203,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
     (when author
       (browse-url (format "https://www.npmjs.com/~%s" author)))))
 
+(defun npm-pkgs--beg-column ()
+  "Return beginning position of the column point."
+  (save-excursion
+    (forward-symbol 1)
+    (search-backward " " (line-beginning-position) t)
+    (forward-char 1)
+    (point)))
+
 (defun npm-pkgs--make-buttons ()
   "Make button to npm client."
   (save-excursion
@@ -214,12 +220,12 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
             (name-author (npm-pkgs--tablist-get-value 'author)))
         (when name-pkg
           (move-to-column (npm-pkgs--tablist-column 'name))
-          (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
+          (make-button (npm-pkgs--beg-column)
                        (+ (point) (length name-pkg))
                        :type 'npm-pkgs--name-button)
           (move-to-column (npm-pkgs--tablist-column 'author))
           (when (thing-at-point 'symbol)
-            (make-button (save-excursion (forward-symbol 1) (forward-symbol -1) (point))
+            (make-button (npm-pkgs--beg-column)
                          (+ (point) (length name-author))
                          :type 'npm-pkgs--author-button))))
       (forward-line 1))))
@@ -444,9 +450,16 @@ ADD-DEL-NUM : Addition or deletion number."
   "Search npm packages."
   (interactive)
   (setq npm-pkgs--buffer (current-buffer)
-        npm-pkgs--data nil)
+        npm-pkgs--data nil
+        npm-pkgs--local-packages nil
+        npm-pkgs--global-packages nil)
   (pop-to-buffer npm-pkgs--buffer-name nil)
   (npm-pkgs-mode))
+
+;;; Functions
+
+(defconst npm-pkgs--command-upgrade-all "npm upgrade"
+  "Npm upgrade command.")
 
 (provide 'npm-pkgs)
 ;;; npm-pkgs.el ends here

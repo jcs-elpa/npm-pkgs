@@ -14,7 +14,21 @@
 
 ### Install packages online
 
+You are able to search through packages from NPM and it will displays in the
+tabulated list.
+
 ### Auto detect workspace
+
+Client will automatically detect the existing `globally` and `locally` installed
+packages.
+
+
+### Control
+
+* <kbd>Shift</kbd>+<kbd>i</kbd> - Mark package for installation.
+* <kbd>Shift</kbd>+<kbd>d</kbd> - Mark package for deletion.
+* <kbd>Shift</kbd>+<kbd>x</kbd> - Execute all makred packages.
+* <kbd>Shift</kbd>+<kbd>u</kbd> - Update all existing packages.
 
 ## Contribution
 

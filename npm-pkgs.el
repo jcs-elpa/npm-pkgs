@@ -265,8 +265,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defconst npm-pkgs--key-list
   '("a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
     "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
-    "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
-    "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"
     "1" "2" "3" "4" "5" "6" "7" "8" "9" "0" "-" "=" "`"
     "!" "@" "#" "$" "%" "^" "&" "*" "(" ")" "_" "\\" "~"
     "{" "}" "[" "]" ";" ":" "'" "\"" "," "." "<" ">" "/"
@@ -289,7 +287,11 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
         (lambda () (interactive) (npm-pkgs--input key-str))))
     (define-key map (kbd "<backspace>")
       (lambda () (interactive) (npm-pkgs--input "" -1)))
-    (define-key map (kbd "u") #'npm-pkgs-upgrade-all)
+    (define-key map (kbd "U") #'npm-pkgs-upgrade-all)
+    (define-key map (kbd "<delete>") #'npm-pkgs-unmark-mark)
+    (define-key map (kbd "I") #'npm-pkgs-mark-install)
+    (define-key map (kbd "D") #'npm-pkgs-mark-delete)
+    (define-key map (kbd "X") #'npm-pkgs-execute)
     map)
   "Kaymap for `npm-pkgs-mode'.")
 
@@ -460,7 +462,7 @@ ADD-DEL-NUM : Addition or deletion number."
   "Major mode for npm pkgs."
   :group 'npm-pkgs
   (setq tabulated-list-format npm-pkgs--tablist-format)
-  (setq tabulated-list-padding 1)
+  (setq tabulated-list-padding 2)
   (setq tabulated-list--header-string (npm-pkgs--get-title-prefix))
   (setq tabulated-list-sort-key (cons "Status" nil))
   (tabulated-list-init-header)
@@ -475,7 +477,8 @@ ADD-DEL-NUM : Addition or deletion number."
   (interactive)
   (setq npm-pkgs--buffer (current-buffer)
         npm-pkgs--data nil
-        npm-pkgs--version "")
+        npm-pkgs--version ""
+        npm-pkgs--marking-entries '())
   (setq npm-pkgs--global-processing-p nil
         npm-pkgs--local-processing-p nil
         npm-pkgs--global-packages nil
@@ -509,8 +512,48 @@ ADD-DEL-NUM : Addition or deletion number."
 (defun npm-pkgs-upgrade-all ()
   "Upgrade all installed packages."
   (interactive)
-  (when (yes-or-no-p "")
-    )
+  (when (yes-or-no-p "Are you sure you want to upgrade all packages? ")
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--cmd-update-production
+     (lambda (output) (message "[npm-pkgs::production] %s" output)))
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--cmd-update-dev
+     (lambda (output) (message "[npm-pkgs::dev] %s" output)))
+    (npm-pkgs--async-shell-command-to-string
+     npm-pkgs--cmd-update-global
+     (lambda (output) (message "[npm-pkgs::global] %s" output)))))
+
+(defvar npm-pkgs--marking-entries nil
+  "Store entries that have been marked.")
+
+(defun npm-pkgs-unmark-mark ()
+  "Mark or Unmark package."
+  (interactive)
+  (setq npm-pkgs--marking-entries (remove (tabulated-list-get-entry) npm-pkgs--marking-entries))
+  (tabulated-list-put-tag ""))
+
+(defun npm-pkgs-mark-install ()
+  "Mark install package."
+  (interactive)
+  (let ((status (npm-pkgs--tablist-get-value 'status)))
+    (when (string= status "available")
+      (push (tabulated-list-get-entry) npm-pkgs--marking-entries)
+      (delete-dups npm-pkgs--marking-entries)
+      (tabulated-list-put-tag "I"))))
+
+(defun npm-pkgs-mark-delete ()
+  "Mark delete package."
+  (interactive)
+  (let ((status (npm-pkgs--tablist-get-value 'status)))
+    (when (or (string= status "workspace") (string= status "global"))
+      (push (tabulated-list-get-entry) npm-pkgs--marking-entries)
+      (delete-dups npm-pkgs--marking-entries)
+      (tabulated-list-put-tag "D"))))
+
+(defun npm-pkgs-execute ()
+  "Execute all the marking."
+  (interactive)
+  (delete-dups npm-pkgs--marking-entries)
   )
 
 (provide 'npm-pkgs)

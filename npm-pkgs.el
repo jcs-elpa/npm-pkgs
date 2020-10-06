@@ -461,5 +461,12 @@ ADD-DEL-NUM : Addition or deletion number."
 (defconst npm-pkgs--command-upgrade-all "npm upgrade"
   "Npm upgrade command.")
 
+(defun npm-pkgs-upgrade-all ()
+  "Upgrade all installed packages."
+  (interactive)
+  (when (yes-or-no-p "")
+    )
+  )
+
 (provide 'npm-pkgs)
 ;;; npm-pkgs.el ends here

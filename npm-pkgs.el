@@ -85,7 +85,7 @@ When the command is finished, call CALLBACK with the resulting output as a strin
          (with-current-buffer output-buffer
            (let ((output-string
                   (buffer-substring-no-properties (point-min) (point-max))))
-             (funcall callback-fun process output-string)))
+             (funcall callback-fun output-string)))
          (kill-buffer output-buffer))))
     output-buffer))
 

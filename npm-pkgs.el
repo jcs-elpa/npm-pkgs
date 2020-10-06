@@ -499,7 +499,7 @@ ADD-DEL-NUM : Addition or deletion number."
 
 (defconst npm-pkgs--cmd-uninstall-global "npm uninstall -g %s"
   "Command to uninstall a global installed package.")
-(defconst npm-pkgs--cmd-uninstall-local "npm uninstall -S %s"
+(defconst npm-pkgs--cmd-uninstall-local "npm uninstall %s"
   "Command to uninstall a local installed package.")
 (defconst npm-pkgs--cmd-uninstall-dev "npm uninstall -D %s"
   "Command to uninstall a devDependency installed package.")
@@ -632,18 +632,19 @@ If TAG is nil; clean all instead."
 
 (defun npm-pkgs--install-pkg (pkg-name type)
   "Install package by PKG-NAME and TYPE."
+  (message "[NPM-PKGS] Installing package `%s` as `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--install-command type) pkg-name)
    (lambda (_output)
-     )))
+     (message "[NPM-PKGS] Installed package %s" pkg-name))))
 
 (defun npm-pkgs--uninstall-pkg (pkg-name type)
   "Uninstall package by PKG-NAME and TYPE."
+  (message "[NPM-PKGS] Uninstalling package `%s` from `%s` dependency" pkg-name type)
   (npm-pkgs--async-shell-command-to-string
    (format (npm-pkgs--uninstall-command type) pkg-name)
    (lambda (_output)
-     ))
-  )
+     (message "[NPM-PKGS] Uninstalled package %s" pkg-name))))
 
 (provide 'npm-pkgs)
 ;;; npm-pkgs.el ends here

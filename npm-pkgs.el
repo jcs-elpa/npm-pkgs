@@ -212,7 +212,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 (defun npm-pkgs--beg-column ()
   "Return beginning position of the column point."
   (save-excursion
-    (forward-symbol 1)
     (search-backward " " (line-beginning-position) t)
     (forward-char 1)
     (point)))
@@ -481,7 +480,7 @@ ADD-DEL-NUM : Addition or deletion number."
   (setq npm-pkgs--buffer (current-buffer)
         npm-pkgs--data nil
         npm-pkgs--version ""
-        npm-pkgs--marking-entries '())
+        npm-pkgs--entre-table (make-hash-table))
   (setq npm-pkgs--global-processing-p nil
         npm-pkgs--local-processing-p nil
         npm-pkgs--global-packages nil
@@ -526,46 +525,77 @@ ADD-DEL-NUM : Addition or deletion number."
      (npm-pkgs--update-command 'global)
      (lambda (output) (message "[npm-pkgs::global] %s" output)))))
 
-(defvar npm-pkgs--marking-entries nil
+(defvar npm-pkgs--entre-table nil
   "Store entries that have been marked.")
+
+(defun npm-pkgs--symbol-to-tag (sym)
+  "Convert SYM to tag."
+  (cl-case sym (global "G") (local "L") (dev "V") (delete "D")))
+
+(defun npm-pkgs--get-tag ()
+  "Get current tag."
+  (let ((tag (substring (thing-at-point 'line) 0 1)))
+    (setq tag (string-trim tag))
+    (if (string-empty-p tag) nil tag)))
+
+(defun npm-pkgs--push-entry (tag &optional entry)
+  "Push ENTRY by TAG."
+  (unless entry (setq entry (tabulated-list-get-entry)))
+  (push entry (gethash (intern tag) npm-pkgs--entre-table)))
+
+(defun npm-pkgs--remove-entry (tag &optional entry)
+  "Remove ENTRY by TAG."
+  (unless entry (setq entry (tabulated-list-get-entry)))
+  (setf (gethash (intern tag) npm-pkgs--entre-table)
+        (remove entry (gethash (intern tag) npm-pkgs--entre-table))))
+
+(defun npm-pkgs--clean-hash (&optional tag)
+  "Clean the hash by TAG.
+If TAG is nil; clean all instead."
+  (if tag (delete-dups (gethash (intern tag) npm-pkgs--entre-table))
+    (dolist (tag (hash-table-keys npm-pkgs--entre-table))
+      (delete-dups (gethash tag npm-pkgs--entre-table)))))
 
 (defun npm-pkgs-unmark-mark ()
   "Mark or Unmark package."
   (interactive)
-  (setq npm-pkgs--marking-entries (remove (tabulated-list-get-entry) npm-pkgs--marking-entries))
+  (let ((tag (npm-pkgs--get-tag)))
+    (when tag (npm-pkgs--remove-entry tag)))
   (tabulated-list-put-tag ""))
 
 (defun npm-pkgs-mark-install ()
   "Mark install package."
   (interactive)
-  (let ((status (npm-pkgs--tablist-get-value 'status)))
+  (let ((status (npm-pkgs--tablist-get-value 'status)) tag)
     (when (string= status "available")
-      (cl-case (npm-pkgs--ask-install-pkg (npm-pkgs--tablist-get-value 'name))
-        (global (tabulated-list-put-tag "G"))
-        (local (tabulated-list-put-tag "L"))
-        (dev (tabulated-list-put-tag "V")))
-      (push (tabulated-list-get-entry) npm-pkgs--marking-entries)
-      (delete-dups npm-pkgs--marking-entries))))
+      (setq tag (npm-pkgs--symbol-to-tag
+                 (npm-pkgs--ask-install-pkg (npm-pkgs--tablist-get-value 'name))))
+      (tabulated-list-put-tag tag)
+      (npm-pkgs--push-entry tag)
+      (npm-pkgs--clean-hash tag))))
 
 (defun npm-pkgs-mark-delete ()
   "Mark delete package."
   (interactive)
-  (let ((status (npm-pkgs--tablist-get-value 'status)))
+  (let ((status (npm-pkgs--tablist-get-value 'status))
+        (tag (npm-pkgs--symbol-to-tag 'delete)))
     (when (or (string= status "workspace") (string= status "global"))
-      (push (tabulated-list-get-entry) npm-pkgs--marking-entries)
-      (delete-dups npm-pkgs--marking-entries)
-      (tabulated-list-put-tag "D"))))
+      (tabulated-list-put-tag tag)
+      (npm-pkgs--push-entry tag)
+      (npm-pkgs--clean-hash tag))))
 
 (defun npm-pkgs-execute ()
   "Execute all marked packages."
   (interactive)
-  (delete-dups npm-pkgs--marking-entries)
-  (dolist (entry npm-pkgs--marking-entries)
-    (let ((pkg-name (npm-pkgs--tablist-get-value 'name entry))
-          (status (npm-pkgs--tablist-get-value 'status entry)))
-      (if (string= status "available")
-          (npm-pkgs--install-pkg pkg-name)
-        (npm-pkgs--delete-pkg pkg-name)))))
+  (npm-pkgs--clean-hash)
+  (dolist (tag (hash-table-keys npm-pkgs--entre-table))
+    (dolist (entry (gethash tag npm-pkgs--entre-table))
+      (let ((status (npm-pkgs--tablist-get-value 'status)))
+        (cl-case tag
+          (D (npm-pkgs--uninstall-command ()))
+          )
+        )
+      )))
 
 (defun npm-pkgs--ask-install-pkg (pkg-name)
   "Ask to mark install package by PKG-NAME."

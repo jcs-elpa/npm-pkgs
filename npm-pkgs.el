@@ -35,6 +35,7 @@
 (require 'browse-url)
 (require 'button)
 
+(require 'cl-lib)
 (require 'dom)
 (require 'request)
 (require 's)
@@ -317,9 +318,11 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   (cl-case index
     (0 'name) (1 'version) (2 'status) (3 'description) (4 'author)))
 
-(defun npm-pkgs--tablist-get-value (sym)
-  "Get value by SYM."
-  (let ((entry (tabulated-list-get-entry)) idx)
+(defun npm-pkgs--tablist-get-value (sym &optional entry)
+  "Get value by SYM.
+If optional argument ENTRY is nil; use current entry at point instead."
+  (unless entry (setq entry (tabulated-list-get-entry)))
+  (let (idx)
     (when entry (setq idx (npm-pkgs--tablist-index sym)))
     (if entry (aref entry idx) nil)))
 
@@ -489,38 +492,38 @@ ADD-DEL-NUM : Addition or deletion number."
 ;;; Functions
 
 (defconst npm-pkgs--cmd-install-global "npm install -g %s"
-  "Install package for global use.")
-
-(defconst npm-pkgs--cmd-install "npm install %s"
-  "Install a package.")
-
+  "Command to install package for global use.")
+(defconst npm-pkgs--cmd-install-local "npm install %s"
+  "Command to install a package.")
 (defconst npm-pkgs--cmd-install-dev "npm install --save-dev %s"
-  "Install package as devDependency.")
+  "Command to install package as devDependency.")
 
-(defconst npm-pkgs--cmd-install-production "npm install --production"
-  "Install everything in package.json, except devDependecies.")
+(defconst npm-pkgs--cmd-uninstall-global "npm uninstall -g %s"
+  "Command to uninstall a global installed package.")
+(defconst npm-pkgs--cmd-uninstall-local "npm uninstall -S %s"
+  "Command to uninstall a local installed package.")
+(defconst npm-pkgs--cmd-uninstall-dev "npm uninstall -D %s"
+  "Command to uninstall a devDependency installed package.")
 
 (defconst npm-pkgs--cmd-update-global "npm upgrade -g"
-  "Update global packages.")
-
-(defconst npm-pkgs--cmd-update-production "npm upgrade"
-  "Update production packages.")
-
+  "Command to upgrad global installed packages.")
+(defconst npm-pkgs--cmd-update-local "npm upgrade"
+  "Command to upgrade production packages.")
 (defconst npm-pkgs--cmd-update-dev "npm upgrade --dev"
-  "Update dev packages.")
+  "Command to upgrade devDependency package.")
 
 (defun npm-pkgs-upgrade-all ()
   "Upgrade all installed packages."
   (interactive)
   (when (yes-or-no-p "Are you sure you want to upgrade all packages? ")
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--cmd-update-production
+     (npm-pkgs--update-command 'local)
      (lambda (output) (message "[npm-pkgs::production] %s" output)))
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--cmd-update-dev
+     (npm-pkgs--update-command 'dev)
      (lambda (output) (message "[npm-pkgs::dev] %s" output)))
     (npm-pkgs--async-shell-command-to-string
-     npm-pkgs--cmd-update-global
+     (npm-pkgs--update-command 'global)
      (lambda (output) (message "[npm-pkgs::global] %s" output)))))
 
 (defvar npm-pkgs--marking-entries nil
@@ -537,9 +540,12 @@ ADD-DEL-NUM : Addition or deletion number."
   (interactive)
   (let ((status (npm-pkgs--tablist-get-value 'status)))
     (when (string= status "available")
+      (cl-case (npm-pkgs--ask-install-pkg (npm-pkgs--tablist-get-value 'name))
+        (global (tabulated-list-put-tag "G"))
+        (local (tabulated-list-put-tag "L"))
+        (dev (tabulated-list-put-tag "V")))
       (push (tabulated-list-get-entry) npm-pkgs--marking-entries)
-      (delete-dups npm-pkgs--marking-entries)
-      (tabulated-list-put-tag "I"))))
+      (delete-dups npm-pkgs--marking-entries))))
 
 (defun npm-pkgs-mark-delete ()
   "Mark delete package."
@@ -551,9 +557,59 @@ ADD-DEL-NUM : Addition or deletion number."
       (tabulated-list-put-tag "D"))))
 
 (defun npm-pkgs-execute ()
-  "Execute all the marking."
+  "Execute all marked packages."
   (interactive)
   (delete-dups npm-pkgs--marking-entries)
+  (dolist (entry npm-pkgs--marking-entries)
+    (let ((pkg-name (npm-pkgs--tablist-get-value 'name entry))
+          (status (npm-pkgs--tablist-get-value 'status entry)))
+      (if (string= status "available")
+          (npm-pkgs--install-pkg pkg-name)
+        (npm-pkgs--delete-pkg pkg-name)))))
+
+(defun npm-pkgs--ask-install-pkg (pkg-name)
+  "Ask to mark install package by PKG-NAME."
+  (let ((answer (completing-read
+                 (format "Install package (%s): " pkg-name)
+                 '("workspace" "globally" "development"))))
+    (cond ((string= answer "globally") 'global)
+          ((string= answer "workspace") 'local)
+          ((string= answer "development") 'dev))))
+
+(defun npm-pkgs--install-command (type)
+  "Return proper install command by TYPE."
+  (cl-case type
+    (global npm-pkgs--cmd-install-global)
+    (local npm-pkgs--cmd-install-local)
+    (dev npm-pkgs--cmd-install-dev)))
+
+(defun npm-pkgs--uninstall-command (type)
+  "Return proper uninstall command by TYPE."
+  (cl-case type
+    (global npm-pkgs--cmd-uninstall-global)
+    (local npm-pkgs--cmd-uninstall-local)
+    (dev npm-pkgs--cmd-uninstall-dev)))
+
+(defun npm-pkgs--update-command (type)
+  "Return proper update command by TYPE."
+  (cl-case type
+    (global npm-pkgs--cmd-update-global)
+    (local npm-pkgs--cmd-update-local)
+    (dev npm-pkgs--cmd-update-dev)))
+
+(defun npm-pkgs--install-pkg (pkg-name type)
+  "Install package by PKG-NAME and TYPE."
+  (npm-pkgs--async-shell-command-to-string
+   (format (npm-pkgs--install-command type) pkg-name)
+   (lambda (output)
+     )))
+
+(defun npm-pkgs--delete-pkg (pkg-name type)
+  ""
+  (npm-pkgs--async-shell-command-to-string
+   (format (npm-pkgs--uninstall-command type) pkg-name)
+   (lambda (output)
+     ))
   )
 
 (provide 'npm-pkgs)

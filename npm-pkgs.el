@@ -474,7 +474,8 @@ ADD-DEL-NUM : Addition or deletion number."
   "Search npm packages."
   (interactive)
   (setq npm-pkgs--buffer (current-buffer)
-        npm-pkgs--data nil)
+        npm-pkgs--data nil
+        npm-pkgs--version "")
   (setq npm-pkgs--global-processing-p nil
         npm-pkgs--local-processing-p nil
         npm-pkgs--global-packages nil

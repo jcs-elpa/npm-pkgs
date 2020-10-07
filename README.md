@@ -4,7 +4,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 # npm-pkgs
-> A npm packages client.
+> An npm packages client.
 
 <p align="center">
   <img src="./etc/demo.png" width="929" height="540"/>
@@ -14,7 +14,7 @@
 
 ### Search packages online (like [npm](https://www.npmjs.com/))
 
-You are able to search through packages from NPM and it will displays in the
+You are able to search through packages from NPM and it will display them in the
 tabulated list.
 
 ### Auto detect workspace
@@ -29,7 +29,7 @@ This package visually displays packages by any actions like `install`,
 
 * <kbd>Shift</kbd>+<kbd>i</kbd> - Mark package for installation.
 * <kbd>Shift</kbd>+<kbd>d</kbd> - Mark package for deletion.
-* <kbd>Shift</kbd>+<kbd>x</kbd> - Execute all makred packages.
+* <kbd>Shift</kbd>+<kbd>x</kbd> - Execute all marked packages.
 * <kbd>Shift</kbd>+<kbd>u</kbd> - Update all existing packages.
 
 ## Usage
@@ -41,7 +41,7 @@ M-x npm-pkgs
 ```
 
 Basically, you can call this command anywhere in the directory.
-But it will probably only shows the global packages without the
+But it will probably only show the global packages without the
 project definition.
 
 ## Contribution

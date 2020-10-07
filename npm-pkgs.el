@@ -6,7 +6,7 @@
 ;; Author: Shen, Jen-Chieh <jcs090218@gmail.com>
 ;; Description: An npm packages client.
 ;; Keyword: npm packages client
-;; Version: 1.0.0
+;; Version: 1.0.1
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
 ;; URL: https://github.com/jcs-elpa/npm-pkgs
 

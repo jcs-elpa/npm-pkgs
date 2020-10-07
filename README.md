@@ -10,7 +10,7 @@
   <img src="./etc/demo.png" width="929" height="540"/>
 </p>
 
-## Usage
+## Features
 
 ### Search packages online (like [npm](https://www.npmjs.com/))
 
@@ -31,6 +31,18 @@ This package visually displays packages by any actions like `install`,
 * <kbd>Shift</kbd>+<kbd>d</kbd> - Mark package for deletion.
 * <kbd>Shift</kbd>+<kbd>x</kbd> - Execute all makred packages.
 * <kbd>Shift</kbd>+<kbd>u</kbd> - Update all existing packages.
+
+## Usage
+
+Simply call the command `npm-pkgs` through `M-x` like this.
+
+```
+M-x npm-pkgs
+```
+
+Basically, you can call this command anywhere in the directory.
+But it will probably only shows the global packages without the
+project definition.
 
 ## Contribution
 

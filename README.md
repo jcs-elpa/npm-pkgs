@@ -22,7 +22,7 @@ tabulated list.
 Client will automatically detect the existing `globally` and `locally` installed
 packages.
 
-### Install/Uninstall/Update packages visiaully
+### `Install`/`Uninstall`/`Update` packages visiaully
 
 This package visually displays packages by any actions like `install`,
 `uninstall`, `update`, etc.

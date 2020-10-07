@@ -1,10 +1,10 @@
-;;; npm-pkgs.el --- A npm packages client  -*- lexical-binding: t; -*-
+;;; npm-pkgs.el --- An npm packages client  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2020  Shen, Jen-Chieh
 ;; Created date 2020-10-05 17:24:59
 
 ;; Author: Shen, Jen-Chieh <jcs090218@gmail.com>
-;; Description: A npm packages client.
+;; Description: An npm packages client.
 ;; Keyword: npm packages client
 ;; Version: 1.0.0
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 ;;
-;; A npm packages client.
+;; An npm packages client.
 ;;
 
 ;;; Code:
@@ -43,7 +43,7 @@
 (require 's)
 
 (defgroup npm-pkgs nil
-  "A npm packages client."
+  "An npm packages client."
   :prefix "npm-pkgs-"
   :group 'tool
   :link '(url-link :tag "Repository" "https://github.com/jcs-elpa/npm-pkgs"))

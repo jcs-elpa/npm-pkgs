@@ -75,6 +75,10 @@
   "Return project root path."
   (cdr (project-current)))
 
+(defun npm-pkgs--kill-timer (timer)
+  "Safe way to kill TIMER."
+  (when (timerp timer) (cancel-timer timer)))
+
 (defun npm-pkgs--async-shell-command-to-string (command callback)
   "Execute shell command COMMAND asynchronously in the background.
 
@@ -116,6 +120,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
               result)))
     result))
 
+(defun npm-pkgs--running-p ()
+  "Return non-nil if something is processing."
+  (or npm-pkgs--global-processing-p
+      npm-pkgs--local-processing-p
+      npm-pkgs--searching-p
+      npm-pkgs--request
+      npm-pkgs--executing-p))
+
 ;;; Global
 
 (defconst npm-pkgs--cmd-list-pkgs-global "npm list -g --depth 0"
@@ -137,8 +149,8 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
        (let ((result (npm-pkgs--collect output t)))
          (unless (equal npm-pkgs--global-packages result)
            (setq npm-pkgs--global-packages result)
-           (npm-pkgs--refresh)
-           (setq npm-pkgs--global-processing-p nil)))))))
+           (npm-pkgs--refresh))
+         (setq npm-pkgs--global-processing-p nil))))))
 
 ;;; Local
 
@@ -161,15 +173,16 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
        (let ((result (npm-pkgs--collect output nil)))
          (unless (equal npm-pkgs--local-packages result)
            (setq npm-pkgs--local-packages result)
-           (npm-pkgs--refresh)
-           (setq npm-pkgs--local-processing-p nil)))))))
+           (npm-pkgs--refresh))
+         (setq npm-pkgs--local-processing-p nil))))))
 
 ;;; Core
 
 (defun npm-pkgs-reset-request ()
   "Cancel the current request and set to initialized state."
   (when npm-pkgs--request (request-abort npm-pkgs--request))
-  (setq npm-pkgs--request nil))
+  (setq npm-pkgs--searching-p nil
+        npm-pkgs--request nil))
 
 (defun npm-pkgs--search (text)
   "Search npm suggested packages list by TEXT."
@@ -354,6 +367,7 @@ If TAG is nil; clean all instead."
   (interactive)
   (unless npm-pkgs--executing-p
     (setq npm-pkgs--executing-p t)
+    (npm-pkgs--start-spinner)
     (npm-pkgs--clean-hash)
     (dolist (tag (hash-table-keys npm-pkgs--entry-table))
       (dolist (entry (gethash tag npm-pkgs--entry-table))
@@ -443,6 +457,78 @@ Arguments TAG and ENTRY are for searching entry table."
     (setq npm-pkgs--count-installed 0
           npm-pkgs--count-uninstalled 0)))
 
+;;; Spinner
+
+(defconst npm-pkgs--spinner-frames '("\\ " "| " "/ " "- ")
+  "Frames of the spinner animation.")
+
+(defvar npm-pkgs--spinner-timer nil
+  "Spinner animation timer.")
+
+(defvar npm-pkgs--spinner-spf 0.2
+  "Seconds per frame for spinner animation.")
+
+(defvar npm-pkgs--spinner-index 0
+  "Animation frame index.")
+
+(defvar npm-pkgs--spinner-first-frame-p nil
+  "Check if current spinner animation's first frame.")
+
+(defvar npm-pkgs--spinner-spinning-p nil
+  "Check if currently the spinner animation is displaying.")
+
+(defun npm-pkgs--display-spinner ()
+  "Display spinner animation."
+  (with-current-buffer npm-pkgs--buffer-name
+    (let ((frame (nth npm-pkgs--spinner-index npm-pkgs--spinner-frames)))
+      (setq tabulated-list--header-string
+            (concat frame (if npm-pkgs--spinner-first-frame-p
+                              tabulated-list--header-string
+                            (substring tabulated-list--header-string
+                                       2 (length tabulated-list--header-string)))))
+      (tabulated-list-revert)
+      (tabulated-list-print-fake-header)
+      (setq npm-pkgs--spinner-first-frame-p nil
+            npm-pkgs--spinner-index (1+ npm-pkgs--spinner-index))
+      (when (<= (length npm-pkgs--spinner-frames) npm-pkgs--spinner-index)
+        (setq npm-pkgs--spinner-index 0))
+      (npm-pkgs--kill-timer npm-pkgs--spinner-timer)
+      (if (npm-pkgs--running-p)
+          (setq npm-pkgs--spinner-timer
+                (run-with-timer npm-pkgs--spinner-spf nil
+                                #'npm-pkgs--display-spinner))
+        (npm-pkgs--stop-spinner)))))
+
+(defun npm-pkgs--start-spinner ()
+  "Start the animation spinner."
+  (unless npm-pkgs--spinner-spinning-p
+    (npm-pkgs--stop-spinner)
+    (setq npm-pkgs--spinner-first-frame-p t
+          npm-pkgs--spinner-spinning-p t)
+    (npm-pkgs--display-spinner)))
+
+(defun npm-pkgs--stop-spinner ()
+  "Stop spinner animation."
+  (when npm-pkgs--spinner-spinning-p
+    (npm-pkgs--kill-timer npm-pkgs--spinner-timer)
+    (setq tabulated-list--header-string
+          (substring tabulated-list--header-string
+                     2 (length tabulated-list--header-string))
+          npm-pkgs--spinner-first-frame-p t
+          npm-pkgs--spinner-spinning-p nil)
+    (tabulated-list-revert)
+    (tabulated-list-print-fake-header)
+    (npm-pkgs--make-buttons)))
+
+(defun npm-pkgs--spinner-frame ()
+  "Return the current spinner frame."
+  (if npm-pkgs--spinner-spinning-p
+      (let ((last-frame-index (1- npm-pkgs--spinner-index)))
+        (when (< last-frame-index 0)
+          (setq last-frame-index (1- (length npm-pkgs--spinner-frames))))
+        (nth last-frame-index npm-pkgs--spinner-frames))
+    ""))
+
 ;;; Buffer
 
 (defconst npm-pkgs--tablist-format
@@ -479,8 +565,8 @@ Arguments TAG and ENTRY are for searching entry table."
 (defvar npm-pkgs--tablist-id 0
   "Tabulated List Id.")
 
-(defvar npm-pkgs--tablist-refresh-p nil
-  "Check if currently tablist refreshing.")
+(defvar npm-pkgs--searching-p nil
+  "Flag to see if currently searching npm packages from internet.")
 
 (defvar npm-pkgs-mode-map
   (let ((map (make-sparse-keymap)))
@@ -494,6 +580,8 @@ Arguments TAG and ENTRY are for searching entry table."
     (define-key map (kbd "I") #'npm-pkgs-mark-install)
     (define-key map (kbd "D") #'npm-pkgs-mark-delete)
     (define-key map (kbd "X") #'npm-pkgs-execute)
+    ;; TODO: Kill the line below. Testing only.
+    (define-key map (kbd "M-k") #'kill-this-buffer)
     map)
   "Kaymap for `npm-pkgs-mode'.")
 
@@ -504,10 +592,12 @@ Arguments TAG and ENTRY are for searching entry table."
     (npm-pkgs--async-shell-command-to-string
      "npm --version"
      (lambda (output)
-       (setq npm-pkgs--version (string-trim output))
-       (setq tabulated-list--header-string (npm-pkgs--get-title-prefix))
+       (setq npm-pkgs--version (string-trim output)
+             tabulated-list--header-string (npm-pkgs--get-title-prefix))
        (tabulated-list-print-fake-header))))
-  (format "[npm %s] %s" npm-pkgs--version npm-pkgs--title-prefix))
+  (format "%s[npm %s] %s"
+          (npm-pkgs--spinner-frame)
+          npm-pkgs--version npm-pkgs--title-prefix))
 
 (defun npm-pkgs--tablist-index (sym)
   "Return index id by SYM."
@@ -563,9 +653,7 @@ If optional argument HL is non-nil; do make buttons."
       (setq tabulated-list-entries (npm-pkgs--get-entries))
       (tabulated-list-revert)
       (tabulated-list-print-fake-header)
-      (when (or npm-pkgs--tablist-refresh-p hl)
-        (npm-pkgs--make-buttons)
-        (setq npm-pkgs--tablist-refresh-p nil)))))
+      (when hl (npm-pkgs--make-buttons)))))
 
 (defun npm-pkgs--input (key-input &optional add-del-num)
   "Insert key KEY-INPUT for fake header for input bar.
@@ -581,8 +669,9 @@ ADD-DEL-NUM : Addition or deletion number."
     (setq tabulated-list--header-string (npm-pkgs--get-title-prefix)))
   (tabulated-list-revert)
   (tabulated-list-print-fake-header)
-  (npm-pkgs--make-buttons)
-  (when (timerp npm-pkgs--refresh-timer) (cancel-timer npm-pkgs--refresh-timer))
+  (setq npm-pkgs--searching-p t)
+  (npm-pkgs--start-spinner)
+  (npm-pkgs--kill-timer npm-pkgs--refresh-timer)
   (setq npm-pkgs--refresh-timer
         (run-with-idle-timer npm-pkgs-delay nil #'npm-pkgs--confirm)))
 
@@ -652,14 +741,13 @@ ADD-DEL-NUM : Addition or deletion number."
 
 (defun npm-pkgs--get-entries ()
   "Get entries for `tabulated-list'."
-  (setq npm-pkgs--tablist-id 0
-        npm-pkgs--tablist-refresh-p nil)
+  (setq npm-pkgs--tablist-id 0)
   (let ((new-entries (append (npm-pkgs--market-entries)
                              (npm-pkgs--local-entries)
                              (npm-pkgs--global-entries))))
     (unless (equal npm-pkgs--all-entries new-entries)
-      (setq npm-pkgs--all-entries new-entries
-            npm-pkgs--tablist-refresh-p t)))
+      (npm-pkgs--start-spinner)
+      (setq npm-pkgs--all-entries new-entries)))
   npm-pkgs--all-entries)
 
 (define-derived-mode npm-pkgs-mode tabulated-list-mode
@@ -691,6 +779,8 @@ ADD-DEL-NUM : Addition or deletion number."
         npm-pkgs--local-processing-p nil
         npm-pkgs--global-packages nil
         npm-pkgs--local-packages nil)
+  (setq npm-pkgs--spinner-spinning-p nil
+        npm-pkgs--searching-p nil)
   (pop-to-buffer npm-pkgs--buffer-name nil)
   (npm-pkgs-mode))
 

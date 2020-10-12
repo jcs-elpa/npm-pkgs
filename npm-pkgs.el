@@ -580,8 +580,6 @@ Arguments TAG and ENTRY are for searching entry table."
     (define-key map (kbd "I") #'npm-pkgs-mark-install)
     (define-key map (kbd "D") #'npm-pkgs-mark-delete)
     (define-key map (kbd "X") #'npm-pkgs-execute)
-    ;; TODO: Kill the line below. Testing only.
-    (define-key map (kbd "M-k") #'kill-this-buffer)
     map)
   "Kaymap for `npm-pkgs-mode'.")
 

@@ -68,6 +68,12 @@
 (defvar npm-pkgs--all-entries nil
   "List of all entries.")
 
+(defvar npm-pkgs--global-processing-p nil
+  "Flag to see if we are currently getting global packages information.")
+
+(defvar npm-pkgs--local-processing-p nil
+  "Flag to see if we are currently getting local packages information.")
+
 ;;; Util
 
 (defun npm-pkgs--project-roort ()
@@ -118,17 +124,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
               result)))
     result))
 
-;;; Global
-
-(defconst npm-pkgs--cmd-list-pkgs-global "npm list -g --depth 0"
-  "List of global packages.")
-
-(defvar npm-pkgs--global-packages nil
-  "List of global packages.")
-
-(defvar npm-pkgs--global-processing-p nil
-  "Flag to see if we are currently getting global packages information.")
-
 (defun npm-pkgs--running-p ()
   "Return non-nil if something is processing."
   (or npm-pkgs--global-processing-p
@@ -136,6 +131,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
       npm-pkgs--searching-p
       npm-pkgs--request
       npm-pkgs--executing-p))
+
+;;; Global
+
+(defconst npm-pkgs--cmd-list-pkgs-global "npm list -g --depth 0"
+  "List of global packages.")
+
+(defvar npm-pkgs--global-packages nil
+  "List of global packages.")
 
 (defun npm-pkgs--global-collect ()
   "Collect global package data."
@@ -157,9 +160,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 (defvar npm-pkgs--local-packages nil
   "List of local packages.")
-
-(defvar npm-pkgs--local-processing-p nil
-  "Flag to see if we are currently getting local packages information.")
 
 (defun npm-pkgs--local-collect ()
   "Collect local package data."

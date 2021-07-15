@@ -118,14 +118,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
               result)))
     result))
 
-(defun npm-pkgs--running-p ()
-  "Return non-nil if something is processing."
-  (or npm-pkgs--global-processing-p
-      npm-pkgs--local-processing-p
-      npm-pkgs--searching-p
-      npm-pkgs--request
-      npm-pkgs--executing-p))
-
 ;;; Global
 
 (defconst npm-pkgs--cmd-list-pkgs-global "npm list -g --depth 0"
@@ -136,6 +128,14 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
 
 (defvar npm-pkgs--global-processing-p nil
   "Flag to see if we are currently getting global packages information.")
+
+(defun npm-pkgs--running-p ()
+  "Return non-nil if something is processing."
+  (or npm-pkgs--global-processing-p
+      npm-pkgs--local-processing-p
+      npm-pkgs--searching-p
+      npm-pkgs--request
+      npm-pkgs--executing-p))
 
 (defun npm-pkgs--global-collect ()
   "Collect global package data."

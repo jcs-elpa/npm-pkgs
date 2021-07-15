@@ -74,6 +74,12 @@
 (defvar npm-pkgs--local-processing-p nil
   "Flag to see if we are currently getting local packages information.")
 
+(defvar npm-pkgs--searching-p nil
+  "Flag to see if currently searching npm packages from internet.")
+
+(defvar npm-pkgs--executing-p nil
+  "Flag to see if we are currently executing commands.")
+
 ;;; Util
 
 (defun npm-pkgs--project-roort ()
@@ -276,9 +282,6 @@ If argument GLOBAL is no-nil, we find global packages instead of local packages.
   "Command to upgrade production packages.")
 (defconst npm-pkgs--cmd-update-dev "npm upgrade --dev"
   "Command to upgrade devDependency package.")
-
-(defvar npm-pkgs--executing-p nil
-  "Flag to see if we are currently executing commands.")
 
 (defvar npm-pkgs--count-installed nil
   "Count installed packages.")
@@ -562,9 +565,6 @@ Arguments TAG and ENTRY are for searching entry table."
 
 (defvar npm-pkgs--tablist-id 0
   "Tabulated List Id.")
-
-(defvar npm-pkgs--searching-p nil
-  "Flag to see if currently searching npm packages from internet.")
 
 (defvar npm-pkgs-mode-map
   (let ((map (make-sparse-keymap)))

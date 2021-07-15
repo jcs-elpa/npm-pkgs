@@ -84,9 +84,8 @@
 Return the temporary output buffer which command is writing to during execution.
 
 When the command is finished, call CALLBACK with the resulting output as a string."
-  (lexical-let
-      ((output-buffer (generate-new-buffer " *temp*"))
-       (callback-fun callback))
+  (let ((output-buffer (generate-new-buffer " *temp*"))
+        (callback-fun callback))
     (set-process-sentinel
      (start-process "Shell" output-buffer shell-file-name shell-command-switch command)
      (lambda (process _signal)

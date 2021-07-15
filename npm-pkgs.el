@@ -80,6 +80,9 @@
 (defvar npm-pkgs--executing-p nil
   "Flag to see if we are currently executing commands.")
 
+(defconst npm-pkgs--buffer-name "*npm-pkgs*"
+  "Name of the buffer to display npm packages.")
+
 ;;; Util
 
 (defun npm-pkgs--project-roort ()
@@ -539,9 +542,6 @@ Arguments TAG and ENTRY are for searching entry table."
           (list "Description" 50 t)
           (list "Published" 15))
   "Format to assign to `tabulated-list-format' variable.")
-
-(defconst npm-pkgs--buffer-name "*npm-pkgs*"
-  "Name of the buffer to display npm packages.")
 
 (defvar npm-pkgs--title-prefix "Keywords: "
   "Header put infront of the input string.")

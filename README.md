@@ -1,10 +1,11 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Release Tag](https://img.shields.io/github/tag/jcs-elpa/npm-pkgs.svg?label=release)](https://github.com/jcs-elpa/npm-pkgs/releases/latest)
 [![Emacs Ver.](https://img.shields.io/badge/Emacs-27.1+-blue.svg)](https://www.gnu.org/software/emacs/)
-[![CI](https://github.com/jcs-elpa/npm-pkgs/actions/workflows/test.yml/badge.svg)](https://github.com/jcs-elpa/npm-pkgs/actions/workflows/test.yml)
 
 # npm-pkgs
 > An npm packages client.
+
+[![CI](https://github.com/jcs-elpa/npm-pkgs/actions/workflows/test.yml/badge.svg)](https://github.com/jcs-elpa/npm-pkgs/actions/workflows/test.yml)
 
 <p align="center">
   <img src="./etc/demo.png" width="929" height="540"/>

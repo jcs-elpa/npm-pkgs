@@ -4,11 +4,10 @@
 ;; Created date 2020-10-05 17:24:59
 
 ;; Author: Shen, Jen-Chieh <jcs090218@gmail.com>
-;; Description: An npm packages client.
-;; Keyword: npm packages client
+;; URL: https://github.com/jcs-elpa/npm-pkgs
 ;; Version: 1.1.1
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
-;; URL: https://github.com/jcs-elpa/npm-pkgs
+;; Keywords: npm packages client
 
 ;; This file is NOT part of GNU Emacs.
 

@@ -2,6 +2,9 @@
          "1.1.1"
          "An npm packages client")
 
+(website-url "https://github.com/jcs-elpa/npm-pkgs")
+(keywords "npm" "packages" "client")
+
 (package-file "npm-pkgs.el")
 
 (source "melpa")

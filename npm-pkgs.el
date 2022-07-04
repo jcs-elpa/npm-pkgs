@@ -7,7 +7,7 @@
 ;; URL: https://github.com/jcs-elpa/npm-pkgs
 ;; Version: 1.1.1
 ;; Package-Requires: ((emacs "27.1") (request "0.3.0") (s "1.12.0"))
-;; Keywords: npm packages client
+;; Keywords: convenience npm packages client
 
 ;; This file is NOT part of GNU Emacs.
 

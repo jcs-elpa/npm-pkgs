@@ -3,7 +3,7 @@
          "An npm packages client")
 
 (website-url "https://github.com/jcs-elpa/npm-pkgs")
-(keywords "npm" "packages" "client")
+(keywords "convenience" "npm" "packages" "client")
 
 (package-file "npm-pkgs.el")
 

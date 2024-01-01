@@ -1,6 +1,6 @@
 ;;; npm-pkgs.el --- An npm packages client  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2020  Shen, Jen-Chieh
+;; Copyright (C) 2020-2024  Shen, Jen-Chieh
 ;; Created date 2020-10-05 17:24:59
 
 ;; Author: Shen, Jen-Chieh <jcs090218@gmail.com>

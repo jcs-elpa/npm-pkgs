@@ -1,3 +1,5 @@
+;; -*- mode: eask; lexical-binding: t -*-
+
 (package "npm-pkgs"
          "1.1.1"
          "An npm packages client")
